@@ -76,34 +76,57 @@ module riscv_core_tb;
 /**********************************************************************                                                                      
 ** signal declarations (ports of the design under test)
 **********************************************************************/
-  	reg clk_tb; 
-	reg reset_tb;    // 
-  	wire [31:0] pc_next_tb;
+  	//global
+	reg clk_tb; 
+	reg reset_tb;    
+
+	// program counter 
+	wire [31:0] pc_tb;
+
+	// instr rom
+	wire [31:0] instr_tb;
+
+	// instr decode
+	wire is_r_instr_tb, is_i_instr_tb, is_s_instr_tb, is_b_instr_tb, is_u_instr_tb, is_j_instr_tb;
+	
 
 /**********************************************************************
 ** Component instances
 **********************************************************************/
 // instantiate the device under test
-program_counter DUT (     // Device under Test
+program_counter pc_dut (     // Device under Test
         // Inputs
 	.clk(clk_tb),
 	.reset(reset_tb),
-       
         // Outputs
-	.pc_next(pc_next_tb)
+	.pc(pc_tb)
         );
+
+instruction_memory irom_dut(
+	// Inputs
+	.clk(clk_tb),
+	.addr(pc_tb),
+	// Outputs
+	.instr(instr_tb)
+	);
+
+instruction_decode dec_dut(
+	//Inputs
+	.clk(clk_tb),
+	.instr(instr_tb),
+	// Outputs
+	.is_r_instr(is_r_instr_tb), .is_i_instr(is_i_instr_tb), .is_s_instr(is_s_instr_tb), .is_b_instr(is_b_instr_tb), .is_u_instr(is_u_instr_tb), .is_j_instr(is_j_instr_tb)
+	);
 	
 	always #5 clk_tb = ~clk_tb;
 
 	initial begin
-		clk_tb <= 0; 
-		reset_tb <= 0;
+		clk_tb <= 1; 
+		reset_tb <= 1;
 
-		#20 reset_tb <= 1;
-		#100 reset_tb <= 0;
-		#40 reset_tb <= 1;
+		#10 reset_tb <= 0;
+		#10 reset_tb <= 1;
 
-		#40 $finish;
 	end
  
 endmodule // riscv_core_tb
