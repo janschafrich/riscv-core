@@ -63,8 +63,17 @@ endmodule
 module instruction_decode(
 	input wire clk,
 	input [31:0]instr,
-	output reg is_r_instr, is_i_instr, is_s_instr, is_b_instr, is_u_instr, is_j_instr
+	output reg is_r_instr, is_i_instr, is_s_instr, is_b_instr, is_u_instr, is_j_instr,
+	output reg [6:0]opcode,
+	output reg[4:0]rd,			// destination register
+	output reg[2:0]funct3,
+	output reg[4:0]rs1,		// source register 1
+	output reg[4:0]rs2,			// source register 1
+	output reg[31:0]imm,		// immediate value (= operand that is decoded inside the instruction)
+	output reg rd_valid, funct3_valid, rs1_valid, rs2_valid, imm_valid
 	);
+
+	// internal signals
 
 	initial begin
 		is_r_instr <= 0;
@@ -76,11 +85,41 @@ module instruction_decode(
 	end
 
 	always @(posedge clk) begin	// RISC-V spec v2.2 p. 104
+		// determine instruction type
 		is_r_instr <= instr[6:2] == 5'b01011 || instr[6:2] == 5'b01100 || instr[6:2] == 5'b01110 || instr[6:2] == 5'b10100;
 		is_i_instr <= instr[6:2] == 5'b00000 || instr[6:2] == 5'b00001 || instr[6:2] == 5'b00100 || instr[6:2] == 5'b00110 || instr[6:2] == 5'b11001;
 		is_s_instr <= instr[6:2] == 5'b01000 || instr[6:2] == 5'b01001;
 		is_b_instr <= instr[6:2] == 5'b11000;
 		is_u_instr <= instr[6:2] == 5'b00101 || instr[6:2] == 5'b01101;
 		is_j_instr <= instr[6:2] == 5'b11011;
+
+		//determine instruction field values
+		opcode 	<= instr[6:0];
+		rd		<= instr[11:7];
+		funct3 	<= instr[14:12];
+		rs1		<= instr[19:15];
+		rs2 		<= instr[24:20];
+
+		// determine whether field is present in current instruction
+		rd_valid 		<= is_r_instr || is_i_instr || is_u_instr || is_j_instr;
+		funct3_valid 	<= is_r_instr || is_i_instr || is_s_instr || is_b_instr;
+		rs1_valid 	<= is_r_instr || is_i_instr || is_s_instr || is_b_instr;
+		rs2_valid 	<= is_r_instr || is_s_instr || is_b_instr;
+		imm_valid	<= is_i_instr || is_s_instr || is_b_instr || is_u_instr || is_j_instr;
+
+		//construct immediate value out of instruction fields - RISC-V spec v2.2 p. 12 https://riscv.org/wp-content/uploads/2017/05/riscv-spec-v2.2.pdf
+		if (is_i_instr)
+				imm <= { {21{instr[31]}}, {instr[30:20]} };
+		else if (is_s_instr)
+				imm <= { {21{instr[31]}}, {instr[30:25]}, {instr[11:8]}, {instr[7]} };
+		else if (is_b_instr)
+				imm <= { {20{instr[31]}}, {instr[7]}, {instr[30:25]}, {instr[11:8]}, {1'b0} };	// last bit zero = only even target addresses possible
+		else if (is_u_instr)
+				imm <= { {instr[31]}, {instr[30:20]}, {instr[19:12]}, {12'b0} };		
+		else if (is_j_instr)
+				imm <= { {12{instr[31]}}, {instr[19:12]}, {instr[20]}, {instr[30:25]}, {instr[24:21]}, {1'b0} };
+		else
+			imm <= 32'b0;	
+
 	end
 endmodule
