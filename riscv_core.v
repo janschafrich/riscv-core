@@ -5,10 +5,9 @@ RISC-V core based on the design used in edX course by Steve Hoover "Building a R
 
 core features:
 RV32I
-no pipeline
 
 */
-
+`timescale 1 ns / 1 ps
 
 module program_counter(
 	input clk,
@@ -51,7 +50,7 @@ module instruction_memory(
 			32'h8:	rom_data = 32'b1111_1111_1100_0000_0000_0001_1001_0011;		// (I) ADDI x3, x0, 111111111100
 			32'hc:	rom_data = 32'b0000_0101_1100_0000_1111_0010_1001_0011;		// (I) ANDI x5, x1, 1011100
 			32'h10:	rom_data = 32'b0000_0001_0101_0010_1100_0010_1001_0011;		// (I) XORI x6, x6, 10101
-			32'h14:	rom_data = 32'b0000_0000_0010_0000_1111_1010_0011_0011;		// Cycle 13 (R) AND r10, x1, x2
+			32'h14:	rom_data = 32'b0000_0000_0010_0000_1111_0101_0011_0011;		// Cycle 13 (R) AND r10, x1, x2
 			32'h18:	rom_data = 32'b0000_0000_0000_0000_0000_1001_1011_0111;		// Cycle 31 (U) LUI x19, 0
 			32'h1c:	rom_data = 32'b0000_0000_0100_0000_0000_1100_1110_1111;		// Cycle 44 (J) JAL x25, 10
 			32'h20:	rom_data = 32'b0000_0000_0001_0001_0010_0000_1010_0011;		// Cycle 51 (S) SW x2, x1, 1
@@ -70,7 +69,9 @@ module instruction_decode(
 	output reg[4:0]rs1,		// source register 1
 	output reg[4:0]rs2,			// source register 1
 	output reg[31:0]imm,		// immediate value (= operand that is decoded inside the instruction)
-	output reg rd_valid, funct3_valid, rs1_valid, rs2_valid, imm_valid
+	output reg rd_valid, funct3_valid, rs1_valid, rs2_valid, imm_valid,
+	output reg [10:0]dec_bits,	// instruction identification
+	output reg is_beq, is_bne, is_blt, is_bge, is_bltu, is_bgeu, is_addi, is_add
 	);
 
 	// internal signals
@@ -93,19 +94,21 @@ module instruction_decode(
 		is_u_instr <= instr[6:2] == 5'b00101 || instr[6:2] == 5'b01101;
 		is_j_instr <= instr[6:2] == 5'b11011;
 
+		
 		//determine instruction field values
 		opcode 	<= instr[6:0];
-		rd		<= instr[11:7];
+		rd		<= instr[11:7];		// loaded for S-type instructions as well, but not used
 		funct3 	<= instr[14:12];
 		rs1		<= instr[19:15];
 		rs2 		<= instr[24:20];
-
+	
+		#1		// delay for simulation to evaluate the instruction type in the same cycle, not the following
 		// determine whether field is present in current instruction
-		rd_valid 		<= is_r_instr || is_i_instr || is_u_instr || is_j_instr;
-		funct3_valid 	<= is_r_instr || is_i_instr || is_s_instr || is_b_instr;
-		rs1_valid 	<= is_r_instr || is_i_instr || is_s_instr || is_b_instr;
-		rs2_valid 	<= is_r_instr || is_s_instr || is_b_instr;
-		imm_valid	<= is_i_instr || is_s_instr || is_b_instr || is_u_instr || is_j_instr;
+		rd_valid 		<= is_r_instr == 1 || is_i_instr == 1 || is_u_instr == 1 || is_j_instr == 1;
+		funct3_valid 	<= is_r_instr == 1 || is_i_instr == 1 || is_s_instr == 1 || is_b_instr == 1;
+		rs1_valid 	<= is_r_instr == 1 || is_i_instr == 1 || is_s_instr == 1 || is_b_instr == 1;
+		rs2_valid 	<= is_r_instr == 1 || is_s_instr == 1 || is_b_instr == 1;
+		imm_valid	<= is_i_instr == 1 || is_s_instr == 1 || is_b_instr == 1 || is_u_instr == 1 || is_j_instr == 1;
 
 		//construct immediate value out of instruction fields - RISC-V spec v2.2 p. 12 https://riscv.org/wp-content/uploads/2017/05/riscv-spec-v2.2.pdf
 		if (is_i_instr)
@@ -120,6 +123,17 @@ module instruction_decode(
 				imm <= { {12{instr[31]}}, {instr[19:12]}, {instr[20]}, {instr[30:25]}, {instr[24:21]}, {1'b0} };
 		else
 			imm <= 32'b0;	
-
+		#1 // delay for simulation
+		dec_bits[10:0] <= {instr[30], funct3, opcode};		// RISC-V RV32I Base instruction set spec V2.2 p. 104
+		
+		#1
+		is_beq 	<= dec_bits[9:0] == 10'b_000_1100011;		//branch equal
+		is_bne 	<= dec_bits[9:0] == 10'b_001_1100011;		//branch not equal
+  		is_blt 	<= dec_bits[9:0] == 10'b_100_1100011;		//branch less than
+  		is_bge 	<= dec_bits[9:0] == 10'b_101_1100011;		//branch greater or equal
+  		is_bltu 	<= dec_bits[9:0] == 10'b_110_1100011;		//branch less than unsigned
+  		is_bgeu 	<= dec_bits[9:0] == 10'b_111_1100011;		//branch greater than unsigned		
+  		is_addi 	<= dec_bits[9:0] == 10'b_000_0010011;		//add immediate		
+  		is_add 	<= dec_bits 		== 11'b0_000_0110011;	//add	
 	end
 endmodule
