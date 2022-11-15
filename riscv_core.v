@@ -137,3 +137,41 @@ module instruction_decode(
   		is_add 	<= dec_bits 		== 11'b0_000_0110011;	//add	
 	end
 endmodule
+
+/*
+module arithmetic_logic_unit(
+	input clk,
+	input [4:0] dest_value, src1_value, src2_value,
+	input [31:0] imm_value,
+	input is_beq, is_bne, is_blt, is_bge, is_bltu, is_bgeu, is_addi, is_add,
+	output reg[31:0] result,
+	output reg taken_br
+);
+	always @(posedge clk) begin
+	result <= is_addi ? src1_value + imm_value :
+			is_add  ? src1_value + src2_value :
+			32'b0; // default	
+
+	end
+	
+
+endmodule
+*/
+
+module register_bank(
+	input clk,	
+	input [4:0] rx,
+	input wren, rden,		// write enable, read enable
+	input[31:0]value_write,
+	output reg[31:0]value_read
+	);
+
+	reg [31:0]rb[31:0];		// 2D array (Matrix): data_width, 2^ register count
+
+	always @(posedge clk) begin
+	if (wren)
+		rb[rx] <= value_write;
+	else if(rden)
+		value_read <= rb[rx];
+	end
+endmodule
