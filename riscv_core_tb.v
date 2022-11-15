@@ -98,6 +98,9 @@ module riscv_core_tb;
 	wire [10:0]dec_bits_tb;
 	wire is_beq_tb, is_bne_tb, is_blt_tb, is_bge_tb, is_bltu_tb, is_bgeu_tb;
 	wire is_addi_tb, is_add_tb;
+
+	// register bank
+	wire [31:0]value_write_tb;
 	
 
 /**********************************************************************
@@ -131,6 +134,20 @@ instruction_decode dec_dut(
 	.dec_bits(dec_bits_tb),
 	.is_beq(is_beq_tb), .is_bne(is_bne_tb), .is_blt(is_blt_tb), .is_bge(is_bge_tb), .is_bltu(is_bltu_tb), .is_bgeu(is_bgeu_tb),
 	.is_addi(is_addi_tb), .is_add(is_add_tb)
+	);
+
+arithmetic_logic_unit alu_dut(
+	// Inputs
+	.clk(clk_tb)
+	);
+
+register_bank rb_dut(
+	//Inputs
+	.clk(clk_tb),
+	.wren(wren_tb),		// provided by decode
+	.rden(rden_tb),
+	.rx(rx_tb),
+	.write_value(write_value_tb)
 	);
 	
 	always #5 clk_tb = ~clk_tb;
