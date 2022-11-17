@@ -68,13 +68,14 @@ module instruction_decode(
 	output reg[2:0]funct3,
 	output reg[4:0]rs1,		// source register 1
 	output reg[4:0]rs2,			// source register 1
-	output reg[31:0]imm,		// immediate value (= operand that is decoded inside the instruction)
+	output reg[31:0]imm, src1_value, src2_value, rd_value,		// immediate value (= operand that is decoded inside the instruction)
 	output reg rd_valid, funct3_valid, rs1_valid, rs2_valid, imm_valid,
 	output reg [10:0]dec_bits,	// instruction identification
 	output reg is_beq, is_bne, is_blt, is_bge, is_bltu, is_bgeu, is_addi, is_add
 	);
 
 	// internal signals
+	reg [31:0]register_file[31:0];		// 2D array (Matrix): word size, register count
 
 	initial begin
 		is_r_instr <= 0;
@@ -83,6 +84,7 @@ module instruction_decode(
 		is_b_instr <= 0;
 		is_u_instr <= 0;
 		is_j_instr <= 0;
+		rd_value <= 0;
 	end
 
 	always @(posedge clk) begin	// RISC-V spec v2.2 p. 104
@@ -101,13 +103,14 @@ module instruction_decode(
 		funct3 	<= instr[14:12];
 		rs1		<= instr[19:15];
 		rs2 		<= instr[24:20];
-	
-		#1		// delay for simulation to evaluate the instruction type in the same cycle, not the following
+	end
+
+	always @(is_r_instr or is_i_instr or is_s_instr or is_b_instr or is_u_instr or is_j_instr) begin
 		// determine whether field is present in current instruction
 		rd_valid 		<= is_r_instr == 1 || is_i_instr == 1 || is_u_instr == 1 || is_j_instr == 1;
 		funct3_valid 	<= is_r_instr == 1 || is_i_instr == 1 || is_s_instr == 1 || is_b_instr == 1;
-		rs1_valid 	<= is_r_instr == 1 || is_i_instr == 1 || is_s_instr == 1 || is_b_instr == 1;
-		rs2_valid 	<= is_r_instr == 1 || is_s_instr == 1 || is_b_instr == 1;
+		rs1_valid 		<= is_r_instr == 1 || is_i_instr == 1 || is_s_instr == 1 || is_b_instr == 1;
+		rs2_valid 		<= is_r_instr == 1 || is_s_instr == 1 || is_b_instr == 1;
 		imm_valid	<= is_i_instr == 1 || is_s_instr == 1 || is_b_instr == 1 || is_u_instr == 1 || is_j_instr == 1;
 
 		//construct immediate value out of instruction fields - RISC-V spec v2.2 p. 12 https://riscv.org/wp-content/uploads/2017/05/riscv-spec-v2.2.pdf
@@ -123,10 +126,13 @@ module instruction_decode(
 				imm <= { {12{instr[31]}}, {instr[19:12]}, {instr[20]}, {instr[30:25]}, {instr[24:21]}, {1'b0} };
 		else
 			imm <= 32'b0;	
-		#1 // delay for simulation
+	end
+
+	always @(instr or funct3 or opcode) begin
 		dec_bits[10:0] <= {instr[30], funct3, opcode};		// RISC-V RV32I Base instruction set spec V2.2 p. 104
-		
-		#1
+		end
+
+	always @(dec_bits) begin
 		is_beq 	<= dec_bits[9:0] == 10'b_000_1100011;		//branch equal
 		is_bne 	<= dec_bits[9:0] == 10'b_001_1100011;		//branch not equal
   		is_blt 	<= dec_bits[9:0] == 10'b_100_1100011;		//branch less than
@@ -134,9 +140,24 @@ module instruction_decode(
   		is_bltu 	<= dec_bits[9:0] == 10'b_110_1100011;		//branch less than unsigned
   		is_bgeu 	<= dec_bits[9:0] == 10'b_111_1100011;		//branch greater than unsigned		
   		is_addi 	<= dec_bits[9:0] == 10'b_000_0010011;		//add immediate		
-  		is_add 	<= dec_bits 		== 11'b0_000_0110011;	//add	
+  		is_add 	<= dec_bits 		== 11'b0_000_0110011;		//add	
+	end
+	
+	// register bank access
+	always @(rs1_valid or rs2_valid or rd_valid) begin
+		if(rs1_valid)
+			src1_value <= register_file[rs1];		// load operand from source register 1
+		else if(rs2_valid)
+			src2_value <= register_file[rs2];
+		else if(rd_valid && (rd !=5'b0) )			// never write to register 0
+			register_file[rd] <= rd_value;			// store value into the destination register
+		else
+			register_file[0] <= 32'b0;
 	end
 endmodule
+
+// ------------------------------------------   // next step: provide src1_value, src2_value, rd_value  // -------------------------------------------- //
+
 
 /*
 module arithmetic_logic_unit(
@@ -158,20 +179,3 @@ module arithmetic_logic_unit(
 endmodule
 */
 
-module register_bank(
-	input clk,	
-	input [4:0] rx,
-	input wren, rden,		// write enable, read enable
-	input[31:0]value_write,
-	output reg[31:0]value_read
-	);
-
-	reg [31:0]rb[31:0];		// 2D array (Matrix): data_width, 2^ register count
-
-	always @(posedge clk) begin
-	if (wren)
-		rb[rx] <= value_write;
-	else if(rden)
-		value_read <= rb[rx];
-	end
-endmodule
