@@ -93,14 +93,14 @@ module riscv_core_tb;
 	wire [2:0]funct3_tb;
 	wire[4:0]rs1_tb;		// source register 1
 	wire [4:0]rs2_tb;			// source register 1
-	wire [31:0]imm_tb;		// immediate value (= operand that is decoded inside the instruction)
+	wire [31:0]imm_tb, src1_value_tb, src2_value_tb, rd_value_tb;		// immediate value (= operand that is decoded inside the instruction)
 	wire rd_valid_tb, funct3_valid_tb, rs1_valid_tb, rs2_valid_tb, imm_valid_tb;
 	wire [10:0]dec_bits_tb;
 	wire is_beq_tb, is_bne_tb, is_blt_tb, is_bge_tb, is_bltu_tb, is_bgeu_tb;
 	wire is_addi_tb, is_add_tb;
 
 	// register bank
-	wire [31:0]value_write_tb;
+	
 	
 
 /**********************************************************************
@@ -130,26 +130,20 @@ instruction_decode dec_dut(
 	// Outputs
 	.is_r_instr(is_r_instr_tb), .is_i_instr(is_i_instr_tb), .is_s_instr(is_s_instr_tb), .is_b_instr(is_b_instr_tb), .is_u_instr(is_u_instr_tb), .is_j_instr(is_j_instr_tb),
 	.opcode(opcode_tb), .rd(rd_tb), .funct3(funct3_tb), .rs1(rs1_tb), .rs2(rs2_tb), .imm(imm_tb),
+	.src1_value(src1_value_tb), .src2_value(src2_value_tb), .rd_value(rd_value_tb),
 	.rd_valid(rd_valid_tb), .funct3_valid(funct3_valid_tb), .rs1_valid(rs1_valid_tb), .rs2_valid(rs2_valid_tb), .imm_valid(imm_valid_tb),
 	.dec_bits(dec_bits_tb),
 	.is_beq(is_beq_tb), .is_bne(is_bne_tb), .is_blt(is_blt_tb), .is_bge(is_bge_tb), .is_bltu(is_bltu_tb), .is_bgeu(is_bgeu_tb),
 	.is_addi(is_addi_tb), .is_add(is_add_tb)
 	);
 
+/*
 arithmetic_logic_unit alu_dut(
 	// Inputs
 	.clk(clk_tb)
 	);
+*/
 
-register_bank rb_dut(
-	//Inputs
-	.clk(clk_tb),
-	.wren(wren_tb),		// provided by decode
-	.rden(rden_tb),
-	.rx(rx_tb),
-	.write_value(write_value_tb)
-	);
-	
 	always #5 clk_tb = ~clk_tb;
 
 	initial begin
