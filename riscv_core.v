@@ -5,6 +5,7 @@ RISC-V core based on the design used in edX course by Steve Hoover "Building a R
 
 core features:
 RV32I
+pipelined stages: fetch, decode/alu
 
 */
 `timescale 1 ns / 1 ps
@@ -24,7 +25,7 @@ module program_counter(
 	always @(posedge clk)  	begin
 		if (!reset) begin
 			pc <= 0;			
-			pc_next <= 0;
+			pc_next <= 4;
 		end
 		else
 			pc = pc_next;			// use blocking assignments for sequential execution
@@ -34,15 +35,23 @@ endmodule
 
 // read only instruction memory
 module instruction_memory(
-	input wire clk,
+	input wire clk, reset,
 	input [31:0] addr,	
 	output reg[31:0] instr
 	);
 
 	reg [31:0]rom_data;		// signal to store rom until its output via instr
 
-	always @(posedge clk) instr <= rom_data;
-	
+	initial begin
+		instr <= 32'b0;
+	end
+
+	always @(posedge clk) begin 
+		if(!reset)
+			instr <= 32'b0;
+		else 
+			instr <= rom_data;
+	end
 	always @*
 		case(addr)	// lookup table - instructions from Steven Hoover RISC-V tutorial https://github.com/stevehoover/LF-Building-a-RISC-V-CPU-Core.git
 			32'h0:	rom_data = 32'b0000_0001_0101_0000_0000_0000_1001_0011;		// (I) ADDI x1, x0, 10101
@@ -60,7 +69,7 @@ endmodule
 
 // extract information from instruction
 module instruction_decode(
-	input wire clk,
+	input wire clk, reset,
 	input [31:0]instr,
 	output reg is_r_instr, is_i_instr, is_s_instr, is_b_instr, is_u_instr, is_j_instr,
 	output reg [6:0]opcode,
@@ -68,14 +77,14 @@ module instruction_decode(
 	output reg[2:0]funct3,
 	output reg[4:0]rs1,		// source register 1
 	output reg[4:0]rs2,			// source register 1
-	output reg[31:0]imm, src1_value, src2_value, rd_value,		// immediate value (= operand that is decoded inside the instruction)
+	output reg[31:0]imm, //src1_value, src2_value, dest_value,		// immediate value (= operand that is decoded inside the instruction)
 	output reg rd_valid, funct3_valid, rs1_valid, rs2_valid, imm_valid,
 	output reg [10:0]dec_bits,	// instruction identification
-	output reg is_beq, is_bne, is_blt, is_bge, is_bltu, is_bgeu, is_addi, is_add
+	output reg is_addi, is_add, is_beq, is_bne, is_blt, is_bge, is_bltu, is_bgeu
 	);
 
 	// internal signals
-	reg [31:0]register_file[31:0];		// 2D array (Matrix): word size, register count
+	//reg [31:0]register_file[31:0];		// 2D array (Matrix): word size, register count
 
 	initial begin
 		is_r_instr <= 0;
@@ -84,10 +93,35 @@ module instruction_decode(
 		is_b_instr <= 0;
 		is_u_instr <= 0;
 		is_j_instr <= 0;
-		rd_value <= 0;
+		//rd_value <= 0;
 	end
 
 	always @(posedge clk) begin	// RISC-V spec v2.2 p. 104
+		if(!reset) begin
+			is_r_instr <= 0;
+			is_i_instr <= 0;
+			is_s_instr <= 0;
+			is_b_instr <= 0;
+			is_u_instr <= 0;
+			is_j_instr <= 0;
+		
+			opcode <= 7'b0;
+			rd <= 5'b0;
+			funct3 <= 3'b0;
+			rs1 <= 5'b0;
+			rs2 <= 5'b0;
+			imm <= 31'b0;
+
+			rd_valid <= 0;
+			funct3_valid <= 0;
+			rs1_valid <= 0;
+			rs2_valid <= 0;
+			imm_valid <= 0;
+
+			dec_bits <= 11'b0;
+		end
+		else begin
+		
 		// determine instruction type
 		is_r_instr <= instr[6:2] == 5'b01011 || instr[6:2] == 5'b01100 || instr[6:2] == 5'b01110 || instr[6:2] == 5'b10100;
 		is_i_instr <= instr[6:2] == 5'b00000 || instr[6:2] == 5'b00001 || instr[6:2] == 5'b00100 || instr[6:2] == 5'b00110 || instr[6:2] == 5'b11001;
@@ -103,9 +137,10 @@ module instruction_decode(
 		funct3 	<= instr[14:12];
 		rs1		<= instr[19:15];
 		rs2 		<= instr[24:20];
+		end
 	end
 
-	always @(is_r_instr or is_i_instr or is_s_instr or is_b_instr or is_u_instr or is_j_instr) begin
+	always @(instr or is_r_instr or is_i_instr or is_s_instr or is_b_instr or is_u_instr or is_j_instr) begin
 		// determine whether field is present in current instruction
 		rd_valid 		<= is_r_instr == 1 || is_i_instr == 1 || is_u_instr == 1 || is_j_instr == 1;
 		funct3_valid 	<= is_r_instr == 1 || is_i_instr == 1 || is_s_instr == 1 || is_b_instr == 1;
@@ -142,9 +177,20 @@ module instruction_decode(
   		is_addi 	<= dec_bits[9:0] == 10'b_000_0010011;		//add immediate		
   		is_add 	<= dec_bits 		== 11'b0_000_0110011;		//add	
 	end
+	/*
+	// ALU - arithmetic and logic unit
+	always @(is_add or is_addi) begin
+	if (is_add) 
+		rd_value <= src1_value + src2_value;
+	else if(is_addi)
+		rd_value <= src1_value + imm;	
+	else 
+		rd_value <= 32'b0;	// default
+	end
 	
+
 	// register bank access
-	always @(rs1_valid or rs2_valid or rd_valid) begin
+	always @(instr) begin
 		if(rs1_valid)
 			src1_value <= register_file[rs1];		// load operand from source register 1
 		else if(rs2_valid)
@@ -154,28 +200,63 @@ module instruction_decode(
 		else
 			register_file[0] <= 32'b0;
 	end
+
+	*/
 endmodule
 
 // ------------------------------------------   // next step: provide src1_value, src2_value, rd_value  // -------------------------------------------- //
 
 
-/*
+module register_file(
+	input clk, reset,
+	input rs1_valid, rs2_valid, rd_valid,
+	input [4:0]rs1, rs2, rd,
+	input [31:0] dest_value,
+	output reg[31:0] src1_value, src2_value
+	);
+
+	reg [31:0]register_file[31:0];		// 2D array (Matrix): word size, register count
+
+	initial begin
+		register_file[0] <= 32'b0;		// register 0 is hardware b0	
+		src1_value <= 32'b0;
+		src2_value <= 32'b0;
+	end
+
+	always @(posedge clk) begin
+		if(!reset) begin
+			src1_value <= 32'b0;
+			src2_value <= 32'b0;
+		end
+		else if(rs1_valid)
+			src1_value <= register_file[rs1];		// load operand from source register 1
+		else if(rs2_valid)
+			src2_value <= register_file[rs2];
+		else if(rd_valid && (rd != 5'b0) )			// never write to register 0
+			register_file[rd] <= dest_value;		// store value into the destination register
+		else
+			register_file[0] <= 32'b0;
+	end
+endmodule
+
+
 module arithmetic_logic_unit(
-	input clk,
-	input [4:0] dest_value, src1_value, src2_value,
-	input [31:0] imm_value,
-	input is_beq, is_bne, is_blt, is_bge, is_bltu, is_bgeu, is_addi, is_add,
-	output reg[31:0] result,
-	output reg taken_br
+	input clk, reset,
+	input [31:0] src1_value, src2_value,
+	input [31:0] imm,
+	input is_addi, is_add, //is_beq, is_bne, is_blt, is_bge, is_bltu, is_bgeu, 
+	output reg[31:0] result
+	//output reg taken_br
 );
 	always @(posedge clk) begin
-	result <= is_addi ? src1_value + imm_value :
-			is_add  ? src1_value + src2_value :
-			32'b0; // default	
-
+		if (!reset) 
+			result <= 31'b0;
+		else begin
+		result <= is_addi ? src1_value + imm :
+				is_add  ? src1_value + src2_value :
+				32'b0; // default	
+		end
 	end
-	
-
 endmodule
-*/
+
 
