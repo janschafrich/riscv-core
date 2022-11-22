@@ -19,7 +19,7 @@ module program_counter(
 	reg [31:0]pc_next;		// internal signal
 
 	initial begin
-		pc <= 32'b0;
+		pc <= 32'bz;
 	end
 	
 	always @(posedge clk)  	begin
@@ -83,9 +83,6 @@ module instruction_decode(
 	output reg is_addi, is_add, is_beq, is_bne, is_blt, is_bge, is_bltu, is_bgeu
 	);
 
-	// internal signals
-	//reg [31:0]register_file[31:0];		// 2D array (Matrix): word size, register count
-
 	initial begin
 		is_r_instr <= 0;
 		is_i_instr <= 0;
@@ -98,58 +95,37 @@ module instruction_decode(
 
 	always @(posedge clk) begin	// RISC-V spec v2.2 p. 104
 		if(!reset) begin
-			is_r_instr <= 0;
-			is_i_instr <= 0;
-			is_s_instr <= 0;
-			is_b_instr <= 0;
-			is_u_instr <= 0;
-			is_j_instr <= 0;
-		
-			opcode <= 7'b0;
-			rd <= 5'b0;
-			funct3 <= 3'b0;
-			rs1 <= 5'b0;
-			rs2 <= 5'b0;
-			imm <= 31'b0;
-
-			rd_valid <= 0;
-			funct3_valid <= 0;
-			rs1_valid <= 0;
-			rs2_valid <= 0;
-			imm_valid <= 0;
-
+			is_r_instr <= 0; is_i_instr <= 0; is_s_instr <= 0; is_b_instr <= 0; is_u_instr <= 0; is_j_instr <= 0;
+			opcode <= 7'b0; rd <= 5'b0; funct3 <= 3'b0; rs1 <= 5'b0; rs2 <= 5'b0; imm <= 32'b0; 
+			rd_valid <= 0; funct3_valid <= 0; rs1_valid <= 0; rs2_valid <= 0; imm_valid <= 0;
 			dec_bits <= 11'b0;
+			is_addi <= 0; is_add <= 0; 
+			is_beq <= 0; is_bne <= 0; is_blt <= 0; is_bge <= 0; is_bltu <= 0; is_bgeu <= 0;	
 		end
 		else begin
 		
-		// determine instruction type
-		is_r_instr <= instr[6:2] == 5'b01011 || instr[6:2] == 5'b01100 || instr[6:2] == 5'b01110 || instr[6:2] == 5'b10100;
-		is_i_instr <= instr[6:2] == 5'b00000 || instr[6:2] == 5'b00001 || instr[6:2] == 5'b00100 || instr[6:2] == 5'b00110 || instr[6:2] == 5'b11001;
-		is_s_instr <= instr[6:2] == 5'b01000 || instr[6:2] == 5'b01001;
-		is_b_instr <= instr[6:2] == 5'b11000;
-		is_u_instr <= instr[6:2] == 5'b00101 || instr[6:2] == 5'b01101;
-		is_j_instr <= instr[6:2] == 5'b11011;
-
-		
-		//determine instruction field values
-		opcode 	<= instr[6:0];
-		rd		<= instr[11:7];		// loaded for S-type instructions as well, but not used
-		funct3 	<= instr[14:12];
-		rs1		<= instr[19:15];
-		rs2 		<= instr[24:20];
+			// determine instruction type
+			is_r_instr <= instr[6:2] == 5'b01011 || instr[6:2] == 5'b01100 || instr[6:2] == 5'b01110 || instr[6:2] == 5'b10100;
+			is_i_instr <= instr[6:2] == 5'b00000 || instr[6:2] == 5'b00001 || instr[6:2] == 5'b00100 || instr[6:2] == 5'b00110 || instr[6:2] == 5'b11001;
+			is_s_instr <= instr[6:2] == 5'b01000 || instr[6:2] == 5'b01001;
+			is_b_instr <= instr[6:2] == 5'b11000;
+			is_u_instr <= instr[6:2] == 5'b00101 || instr[6:2] == 5'b01101;
+			is_j_instr <= instr[6:2] == 5'b11011;
+	
 		end
 	end
+		
 
 	always @(instr or is_r_instr or is_i_instr or is_s_instr or is_b_instr or is_u_instr or is_j_instr) begin
 		// determine whether field is present in current instruction
 		rd_valid 		<= is_r_instr == 1 || is_i_instr == 1 || is_u_instr == 1 || is_j_instr == 1;
 		funct3_valid 	<= is_r_instr == 1 || is_i_instr == 1 || is_s_instr == 1 || is_b_instr == 1;
-		rs1_valid 		<= is_r_instr == 1 || is_i_instr == 1 || is_s_instr == 1 || is_b_instr == 1;
-		rs2_valid 		<= is_r_instr == 1 || is_s_instr == 1 || is_b_instr == 1;
+		rs1_valid 	<= is_r_instr == 1 || is_i_instr == 1 || is_s_instr == 1 || is_b_instr == 1;
+		rs2_valid 	<= is_r_instr == 1 || is_s_instr == 1 || is_b_instr == 1;
 		imm_valid	<= is_i_instr == 1 || is_s_instr == 1 || is_b_instr == 1 || is_u_instr == 1 || is_j_instr == 1;
 
 		//construct immediate value out of instruction fields - RISC-V spec v2.2 p. 12 https://riscv.org/wp-content/uploads/2017/05/riscv-spec-v2.2.pdf
-		if (is_i_instr)
+		if (is_i_instr )
 				imm <= { {21{instr[31]}}, {instr[30:20]} };
 		else if (is_s_instr)
 				imm <= { {21{instr[31]}}, {instr[30:25]}, {instr[11:8]}, {instr[7]} };
@@ -163,48 +139,35 @@ module instruction_decode(
 			imm <= 32'b0;	
 	end
 
+	always @(instr or rd_valid or funct3_valid or rs1_valid or rs2_valid) begin
+		//determine instruction field values
+		opcode 	<= instr[6:0];
+		if (rd_valid) 
+			rd		<= instr[11:7];		// loaded for S-type instructions as well, but not used
+		else if(funct3_valid)
+			funct3 	<= instr[14:12];
+		else if(rs1_valid)
+			rs1		<= instr[19:15];
+		else if(rs2_valid)
+			rs2 		<= instr[24:20];
+	end
+
 	always @(instr or funct3 or opcode) begin
 		dec_bits[10:0] <= {instr[30], funct3, opcode};		// RISC-V RV32I Base instruction set spec V2.2 p. 104
 		end
 
 	always @(dec_bits) begin
-		is_beq 	<= dec_bits[9:0] == 10'b_000_1100011;		//branch equal
-		is_bne 	<= dec_bits[9:0] == 10'b_001_1100011;		//branch not equal
-  		is_blt 	<= dec_bits[9:0] == 10'b_100_1100011;		//branch less than
-  		is_bge 	<= dec_bits[9:0] == 10'b_101_1100011;		//branch greater or equal
-  		is_bltu 	<= dec_bits[9:0] == 10'b_110_1100011;		//branch less than unsigned
-  		is_bgeu 	<= dec_bits[9:0] == 10'b_111_1100011;		//branch greater than unsigned		
-  		is_addi 	<= dec_bits[9:0] == 10'b_000_0010011;		//add immediate		
-  		is_add 	<= dec_bits 		== 11'b0_000_0110011;		//add	
+		is_beq 	<= dec_bits[9:0] 		== 10'b_000_1100011;		//branch equal
+		is_bne 	<= dec_bits[9:0] 		== 10'b_001_1100011;		//branch not equal
+  		is_blt 	<= dec_bits[9:0] 		== 10'b_100_1100011;		//branch less than
+  		is_bge 	<= dec_bits[9:0] 		== 10'b_101_1100011;		//branch greater or equal
+  		is_bltu 	<= dec_bits[9:0] 		== 10'b_110_1100011;		//branch less than unsigned
+  		is_bgeu 	<= dec_bits[9:0] 		== 10'b_111_1100011;		//branch greater than unsigned		
+  		is_addi 	<= dec_bits[9:0] 		== 10'b_000_0010011;		//add immediate		
+  		is_add 	<= dec_bits [10:0]	== 11'b0_000_0110011;		//add	
 	end
-	/*
-	// ALU - arithmetic and logic unit
-	always @(is_add or is_addi) begin
-	if (is_add) 
-		rd_value <= src1_value + src2_value;
-	else if(is_addi)
-		rd_value <= src1_value + imm;	
-	else 
-		rd_value <= 32'b0;	// default
-	end
-	
-
-	// register bank access
-	always @(instr) begin
-		if(rs1_valid)
-			src1_value <= register_file[rs1];		// load operand from source register 1
-		else if(rs2_valid)
-			src2_value <= register_file[rs2];
-		else if(rd_valid && (rd !=5'b0) )			// never write to register 0
-			register_file[rd] <= rd_value;			// store value into the destination register
-		else
-			register_file[0] <= 32'b0;
-	end
-
-	*/
 endmodule
 
-// ------------------------------------------   // next step: provide src1_value, src2_value, rd_value  // -------------------------------------------- //
 
 
 module register_file(
@@ -244,19 +207,26 @@ module arithmetic_logic_unit(
 	input clk, reset,
 	input [31:0] src1_value, src2_value,
 	input [31:0] imm,
-	input is_addi, is_add, //is_beq, is_bne, is_blt, is_bge, is_bltu, is_bgeu, 
-	output reg[31:0] result
-	//output reg taken_br
+	input is_addi, is_add, 
+	input is_beq, is_bne, is_blt, is_bge, is_bltu, is_bgeu, 
+	output reg[31:0] result,
+	output reg taken_br
 );
 	always @(posedge clk) begin
 		if (!reset) 
-			result <= 31'b0;
+			result <= 32'b0;
 		else begin
 		result <= is_addi ? src1_value + imm :
 				is_add  ? src1_value + src2_value :
-				32'b0; // default	
+				32'b0; // default
+
+		taken_br	<= 	is_beq 	? (src1_value == src2_value) :
+					is_bne	? (src1_value != src2_value) :
+					is_blt	? ((src1_value < src2_value) ^ (src1_value[31] != src2_value[31])) :		// signed!  src1 < src2   XOR different sign  ;  consider evaluation of: d-8 (=b1000) < d7 (b0111)? 
+					is_bge	? ((src1_value >= src2_value) ^ (src1_value[31] != src2_value[31])) :	// signed
+					is_bltu	? (src1_value < src2_value) :
+					is_bgeu	? (src1_value >= src2_value) :
+					1'b0;
 		end
 	end
 endmodule
-
-
