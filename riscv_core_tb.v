@@ -96,14 +96,15 @@ module riscv_core_tb;
 	wire [31:0]imm_tb, src1_value_tb, src2_value_tb; //dest_value_tb;		// immediate value (= operand that is decoded inside the instruction)
 	wire rd_valid_tb, funct3_valid_tb, rs1_valid_tb, rs2_valid_tb, imm_valid_tb;
 	wire [10:0]dec_bits_tb;
-	wire is_beq_tb, is_bne_tb, is_blt_tb, is_bge_tb, is_bltu_tb, is_bgeu_tb;
+	wire is_beq_tb, is_bne_tb, is_blt_tb, is_bge_tb, is_bltu_tb, is_bgeu_tb, is_lui_tb, is_auipc_tb, is_jal_tb, is_jalr_tb;
 	wire is_addi_tb, is_add_tb;
-
+	wire is_xori_tb, is_ori_tb, is_andi_tb, is_and_tb;
 	// register file
 	//wire [31:0]register_file_tb[31:0];
 
 	//alu
 	wire [31:0]dest_value_tb;
+	wire taken_br_tb;
 	
 	
 	
@@ -116,6 +117,9 @@ program_counter pc_dut (     // Device under Test
         // Inputs
 	.clk(clk_tb),
 	.reset(reset_tb),
+	.tgt_addr(des_value_tb),
+	.taken_br(taken_br_tb),
+	.is_jalr(is_jalr_tb),
         // Outputs
 	.pc(pc_tb)
         );
@@ -141,7 +145,9 @@ instruction_decode dec_dut(
 	.rd_valid(rd_valid_tb), .funct3_valid(funct3_valid_tb), .rs1_valid(rs1_valid_tb), .rs2_valid(rs2_valid_tb), .imm_valid(imm_valid_tb),
 	.dec_bits(dec_bits_tb),
 	.is_beq(is_beq_tb), .is_bne(is_bne_tb), .is_blt(is_blt_tb), .is_bge(is_bge_tb), .is_bltu(is_bltu_tb), .is_bgeu(is_bgeu_tb),
-	.is_addi(is_addi_tb), .is_add(is_add_tb)
+	.is_addi(is_addi_tb), .is_add(is_add_tb),
+	.is_lui(is_lui_tb), .is_auipc(is_auipc_tb), .is_jal(is_jal_tb), .is_jalr(is_jalr_tb),
+	.is_xori(is_xori_tb), .is_ori(is_ori_tb), .is_andi(is_andi_tb), .is_and(is_and_tb)
 	//.register_file(register_file_tb)
 	
 	);
@@ -163,10 +169,14 @@ arithmetic_logic_unit alu_dut(
 	// Inputs
 	.clk(clk_tb),
 	.reset(reset_tb),
-	.src1_value(src1_value_tb), .src2_value(src2_value_tb), .imm(imm_tb),
+	.src1_value(src1_value_tb), .src2_value(src2_value_tb), .imm(imm_tb), .pc(pc_tb),
+	.is_beq(is_beq_tb), .is_bne(is_bne_tb), .is_blt(is_blt_tb), .is_bge(is_bge_tb), .is_bltu(is_bltu_tb), .is_bgeu(is_bgeu_tb),
 	.is_addi(is_addi_tb), .is_add(is_add_tb),
+	.is_lui(is_lui_tb), .is_auipc(is_auipc_tb), .is_jal(is_jal_tb), .is_jalr(is_jalr_tb),
+	.is_xori(is_xori_tb), .is_ori(is_ori_tb), .is_andi(is_andi_tb), .is_and(is_and_tb),
 	// outputs
-	.result(dest_value_tb)
+	.result(dest_value_tb),
+	.taken_br(taken_br_tb)
 	);
 
 
