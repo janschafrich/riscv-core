@@ -89,16 +89,15 @@ module riscv_core_tb;
 	// instr decode
 	wire is_r_instr_tb, is_i_instr_tb, is_s_instr_tb, is_b_instr_tb, is_u_instr_tb, is_j_instr_tb;
 	wire [6:0]opcode_tb;
-	wire [4:0]rd_tb;			// destination register
+	wire [4:0]rd_tb, rs1_tb, rs2_tb;			// destination register, source register 1, source register 2
 	wire [2:0]funct3_tb;
-	wire[4:0]rs1_tb;			// source register 1
-	wire [4:0]rs2_tb;			// source register 1
 	wire [31:0]imm_tb, src1_value_tb, src2_value_tb; //dest_value_tb;		// immediate value (= operand that is decoded inside the instruction)
 	wire rd_valid_tb, funct3_valid_tb, rs1_valid_tb, rs2_valid_tb, imm_valid_tb;
 	wire [10:0]dec_bits_tb;
 	wire is_beq_tb, is_bne_tb, is_blt_tb, is_bge_tb, is_bltu_tb, is_bgeu_tb, is_lui_tb, is_auipc_tb, is_jal_tb, is_jalr_tb;
 	wire is_addi_tb, is_add_tb;
 	wire is_xori_tb, is_ori_tb, is_andi_tb, is_and_tb;
+	wire is_slti_tb, is_sltiu_tb;
 	// register file
 	//wire [31:0]register_file_tb[31:0];
 
@@ -147,7 +146,8 @@ instruction_decode dec_dut(
 	.is_beq(is_beq_tb), .is_bne(is_bne_tb), .is_blt(is_blt_tb), .is_bge(is_bge_tb), .is_bltu(is_bltu_tb), .is_bgeu(is_bgeu_tb),
 	.is_addi(is_addi_tb), .is_add(is_add_tb),
 	.is_lui(is_lui_tb), .is_auipc(is_auipc_tb), .is_jal(is_jal_tb), .is_jalr(is_jalr_tb),
-	.is_xori(is_xori_tb), .is_ori(is_ori_tb), .is_andi(is_andi_tb), .is_and(is_and_tb)
+	.is_xori(is_xori_tb), .is_ori(is_ori_tb), .is_andi(is_andi_tb), .is_and(is_and_tb),
+	.is_slti(is_slti_tb), .is_sltiu(is_sltiu)
 	//.register_file(register_file_tb)
 	
 	);
@@ -174,6 +174,7 @@ arithmetic_logic_unit alu_dut(
 	.is_addi(is_addi_tb), .is_add(is_add_tb),
 	.is_lui(is_lui_tb), .is_auipc(is_auipc_tb), .is_jal(is_jal_tb), .is_jalr(is_jalr_tb),
 	.is_xori(is_xori_tb), .is_ori(is_ori_tb), .is_andi(is_andi_tb), .is_and(is_and_tb),
+	.is_slti(is_slti_tb), .is_sltiu(is_sltiu),
 	// outputs
 	.result(dest_value_tb),
 	.taken_br(taken_br_tb)
