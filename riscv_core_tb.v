@@ -95,9 +95,9 @@ module riscv_core_tb;
 	wire rd_valid_tb, funct3_valid_tb, rs1_valid_tb, rs2_valid_tb, imm_valid_tb;
 	wire [10:0]dec_bits_tb;
 	wire is_beq_tb, is_bne_tb, is_blt_tb, is_bge_tb, is_bltu_tb, is_bgeu_tb, is_lui_tb, is_auipc_tb, is_jal_tb, is_jalr_tb;
-	wire is_addi_tb, is_add_tb;
-	wire is_xori_tb, is_ori_tb, is_andi_tb, is_and_tb;
-	wire is_slti_tb, is_sltiu_tb;
+	wire is_addi_tb, is_add_tb, is_sub_tb;
+	wire is_xor_tb, is_xori_tb, is_or_tb, is_ori_tb, is_andi_tb, is_and_tb;
+	wire is_slt_tb, is_sltu_tb, is_slti_tb, is_sltiu_tb, is_sll_tb, is_slli_tb, is_srl_tb, is_srli_tb, is_sra_tb, is_srai_tb;
 	// register file
 	//wire [31:0]register_file_tb[31:0];
 
@@ -144,10 +144,10 @@ instruction_decode dec_dut(
 	.rd_valid(rd_valid_tb), .funct3_valid(funct3_valid_tb), .rs1_valid(rs1_valid_tb), .rs2_valid(rs2_valid_tb), .imm_valid(imm_valid_tb),
 	.dec_bits(dec_bits_tb),
 	.is_beq(is_beq_tb), .is_bne(is_bne_tb), .is_blt(is_blt_tb), .is_bge(is_bge_tb), .is_bltu(is_bltu_tb), .is_bgeu(is_bgeu_tb),
-	.is_addi(is_addi_tb), .is_add(is_add_tb),
+	.is_addi(is_addi_tb), .is_add(is_add_tb), .is_sub(is_sub_tb),
 	.is_lui(is_lui_tb), .is_auipc(is_auipc_tb), .is_jal(is_jal_tb), .is_jalr(is_jalr_tb),
-	.is_xori(is_xori_tb), .is_ori(is_ori_tb), .is_andi(is_andi_tb), .is_and(is_and_tb),
-	.is_slti(is_slti_tb), .is_sltiu(is_sltiu)
+	.is_xor(is_xor_tb), .is_xori(is_xori_tb), .is_or(is_or_tb), .is_ori(is_ori_tb), .is_andi(is_andi_tb), .is_and(is_and_tb),
+	.is_slt(is_slt_tb), .is_slti(is_slti_tb), .is_sltu(is_sltu_tb), .is_sltiu(is_sltiu), .is_sll(is_sll_tb), .is_slli(is_slli_tb), .is_srl(is_srl_tb), .is_srli(is_srli_tb), .is_sra(is_sra_tb), .is_srai(is_srai_tb)
 	//.register_file(register_file_tb)
 	
 	);
@@ -171,10 +171,10 @@ arithmetic_logic_unit alu_dut(
 	.reset(reset_tb),
 	.src1_value(src1_value_tb), .src2_value(src2_value_tb), .imm(imm_tb), .pc(pc_tb),
 	.is_beq(is_beq_tb), .is_bne(is_bne_tb), .is_blt(is_blt_tb), .is_bge(is_bge_tb), .is_bltu(is_bltu_tb), .is_bgeu(is_bgeu_tb),
-	.is_addi(is_addi_tb), .is_add(is_add_tb),
+	.is_addi(is_addi_tb), .is_add(is_add_tb), .is_sub(is_sub_tb),
 	.is_lui(is_lui_tb), .is_auipc(is_auipc_tb), .is_jal(is_jal_tb), .is_jalr(is_jalr_tb),
-	.is_xori(is_xori_tb), .is_ori(is_ori_tb), .is_andi(is_andi_tb), .is_and(is_and_tb),
-	.is_slti(is_slti_tb), .is_sltiu(is_sltiu),
+	.is_xor(is_xor_tb), .is_xori(is_xori_tb), .is_or(is_or_tb), .is_ori(is_ori_tb), .is_andi(is_andi_tb), .is_and(is_and_tb),
+	.is_slt(is_slt_tb), .is_slti(is_slti_tb), .is_sltu(is_sltu_tb), .is_sltiu(is_sltiu), .is_sll(is_sll_tb), .is_slli(is_slli_tb), .is_srl(is_srl_tb), .is_srli(is_srli_tb), .is_sra(is_sra_tb), .is_srai(is_srai_tb),
 	// outputs
 	.result(dest_value_tb),
 	.taken_br(taken_br_tb)
