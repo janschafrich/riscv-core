@@ -1,296 +1,195 @@
 
-/* RISC-V CPU Core
+/*******************************************************************************
+-*                                                                            **
+**                               74LS161a Test Bench                          **
+**                                                                            **
+********************************************************************************
+**
+** Replace [items in brackets] with your content
+** @file AAC2M4P1_tb.v
+** @version: 1.0 
+** Date of current revision:  @date 2019*08*16  
+** Target FPGA: [Intel Altera MAX10] 
+** Tools used: Sigasi for editing and synthesis checking 
+**             Modeltech ModelSIM 10.4a Student Edition for simulation 
+**             
+**  Functional Description:  This file contains the Verilog which describes the 
+**              test bench for an FPGA implementation of a 16 bit counter.
+**              The inputs are a 4 bit vector D, an active low Load_n, ENP and ENT. 
+**              
+**              Outputs are Q(4-bits) and RCO  
+**  Hierarchy:  This test bench uses the AAC2M4P1.vs component found
+**              in the Work Library.
+**             The YourFPGA component is instantiated. This is the component 
+**             under test.  Other devices on the board are modeled as processes 
+**             which run concurrently.    The other 
+**             devices are listed in the following function sections:
+**                [ I.   Clock * generates XX MHz clock 
+**                 II.  Reset control
+**                 III. Interrupt Control
+**                 IV.  Address/Data Bus
+**                      etc.         ]
+**
+**              The FPGA is one module.  The test bench module is one
+**              functional section, which compares all the possible
+**              input bit vector combinations and checks to see if the
+**              result is correct after a 10 ns delay.   
 
-RISC-V core based on the design used in edX course by Steve Hoover "Building a RISC-V CPU Core".
-
-core features:
-RV32I
-pipelined stages: fetch, decode/alu
-
+**   TESTS 
+**   I. Counter test
+**    compare all the possible input bit vector combinations and checks to see 
+**    if the result is correct after a 10 ns delay.
+**  
+**  Designed by:  @author Sanju Prakash Kannioth
+**                Univeristy of Colorado
+**                sanju.kannioth@colorado.edu 
+** 
+**      Copyright (c) 2018, 2019 by Tim Scherr
+**
+** Redistribution, modification or use of this software in source or binary
+** forms is permitted as long as the files maintain this copyright. Users are
+** permitted to modify this and use it to learn about the field of HDl code.
+** Tim Scherr and the University of Colorado are not liable for any misuse
+** of this material.
+******************************************************************************
+** 
 */
-`timescale 1 ns / 1 ps
 
-module program_counter(
-	input clk,
-	input reset,
-	input taken_br, is_jalr,
-	input tgt_addr,
-	output reg [31:0]pc
-	);
+`timescale 1 ns / 1 ps   // set timescale to nanoseconds, ps precision
+/**********************************************************************
+** Libraries
+**********************************************************************/
+                                                        
+/**********************************************************************
+** Testbench entity declaration
+**********************************************************************/
+module riscv_core_tb;  
+// no external interface.....THIS IS THE TOP LEVEL
+
+
+/**********************************************************************
+*** constant declarations
+**********************************************************************/
+//   parameter delay = 10;  //ns  defines the wait period.
+//   parameter CLK_PERIOD = 5; //ns defines half clock period
+
+/**********************************************************************                                                                      
+** signal declarations (ports of the design under test)
+**********************************************************************/
+  	//global
+	reg clk_tb; 
+	reg reset_tb;    
+
+	// program counter 
+	wire [31:0] pc_tb;
+
+	// instr rom
+	wire [31:0] instr_tb;
+
+	// instr decode
+	wire is_r_instr_tb, is_i_instr_tb, is_s_instr_tb, is_b_instr_tb, is_u_instr_tb, is_j_instr_tb;
+	wire [6:0]opcode_tb;
+	wire [4:0]rd_tb, rs1_tb, rs2_tb;			// destination register, source register 1, source register 2
+	wire [2:0]funct3_tb;
+	wire [31:0]imm_tb, src1_value_tb, src2_value_tb; //dest_value_tb;		// immediate value (= operand that is decoded inside the instruction)
+	wire rd_valid_tb, funct3_valid_tb, rs1_valid_tb, rs2_valid_tb, imm_valid_tb;
+	wire [10:0]dec_bits_tb;
+	wire is_beq_tb, is_bne_tb, is_blt_tb, is_bge_tb, is_bltu_tb, is_bgeu_tb, is_lui_tb, is_auipc_tb, is_jal_tb, is_jalr_tb;
+	wire is_addi_tb, is_add_tb, is_sub_tb;
+	wire is_xor_tb, is_xori_tb, is_or_tb, is_ori_tb, is_andi_tb, is_and_tb;
+	wire is_slt_tb, is_sltu_tb, is_slti_tb, is_sltiu_tb, is_sll_tb, is_slli_tb, is_srl_tb, is_srli_tb, is_sra_tb, is_srai_tb;
+	// register file
+	//wire [31:0]register_file_tb[31:0];
+
+	//alu
+	wire [31:0]dest_value_tb;
+	wire taken_br_tb;
 	
-	reg [31:0]pc_next;		// internal signal
-
-	initial begin
-		pc <= 32'bz;
-	end
 	
-	always @(posedge clk)  	begin
-		if (!reset) begin
-			pc <= 0;			
-			pc_next <= 4;
-		end
-		if(taken_br || is_jalr)
-			pc_next <= tgt_addr;
-		else
-			pc = pc_next;			// use blocking assignments for sequential execution
-			pc_next = pc_next + 4;	// 32 bit wide instructions begin every 4 adresses
-	end
-endmodule
-
-// read only instruction memory
-module instruction_memory(
-	input wire clk, reset,
-	input [31:0] addr,	
-	output reg[31:0] instr
-	);
-
-	reg [31:0]rom_data;		// signal to store rom until its output via instr
-
-	initial begin
-		instr <= 32'b0;
-	end
-
-	always @(posedge clk) begin 
-		if(!reset)
-			instr <= 32'b0;
-		else 
-			instr <= rom_data;
-	end
-	always @*
-		case(addr)	// lookup table - instructions from Steven Hoover RISC-V tutorial https://github.com/stevehoover/LF-Building-a-RISC-V-CPU-Core.git
-			//                                            imm		    	     rs1   funct3   rd      opcode
-			32'h0:	rom_data = 32'b0000_0001_0101_00000_000_00001_0010011;		// (I) ADDI x1, x0, 10101
-			32'h4:	rom_data = 32'b0000_0000_0111_00000_000_00010_0010011;		// (I) ADDI x2, x0, 111
-			32'h8:	rom_data = 32'b1111_1111_1100_00000_000_00011_0010011;		// (I) ADDI x3, x0, 111111111100
-			32'hc:	rom_data = 32'b0000_0101_1100_00001_111_00101_0010011;		// (I) ANDI x5, x1, 1011100
-			32'h10:	rom_data = 32'b0000_0001_0101_00101_100_00101_0010011;		// (I) XORI x5, x5, 10101
-			32'h14:	rom_data = 32'b0000_0000_0010_0000_1111_0101_0011_0011;		// Cycle 13 (R) AND r10, x1, x2
-			32'h18:	rom_data = 32'b0000_0000_0000_0000_0000_1001_1011_0111;		// Cycle 31 (U) LUI x19, 0
-			32'h1c:	rom_data = 32'b0000_0000_0100_0000_0000_1100_1110_1111;		// Cycle 44 (J) JAL x25, 10
-			32'h20:	rom_data = 32'b0000_0000_0001_0001_0010_0000_1010_0011;		// Cycle 51 (S) SW x2, x1, 1
-		endcase
-endmodule
-
-
-// extract information from instruction
-module instruction_decode(
-	input wire clk, reset,
-	input [31:0]instr,
-	output reg is_r_instr, is_i_instr, is_s_instr, is_b_instr, is_u_instr, is_j_instr,
-	output reg [6:0]opcode,
-	output reg[4:0]rd,	rs1, rs2,		// destination register, source register 1, source register 2
-	output reg[2:0]funct3,
-	output reg[31:0]imm, //src1_value, src2_value, dest_value,		// immediate value (= operand that is decoded inside the instruction)
-	output reg rd_valid, funct3_valid, rs1_valid, rs2_valid, imm_valid,
-	output reg [10:0]dec_bits,	// instruction identification
-	output reg is_addi, is_add, is_sub,
-	output reg is_beq, is_bne, is_blt, is_bge, is_bltu, is_bgeu, is_lui, is_auipc, is_jal, is_jalr,
-	output reg is_xor, is_xori, is_or, is_ori, is_andi, is_and,
-	output reg is_slt, is_slti, is_sltu, is_sltiu, is_slli, is_srli, is_sra, is_srai, is_sll, is_srl
-	);
-
-	initial begin
-		is_r_instr <= 0;
-		is_i_instr <= 0;
-		is_s_instr <= 0;
-		is_b_instr <= 0;
-		is_u_instr <= 0;
-		is_j_instr <= 0;
-		//rd_value <= 0;
-	end
-
-	always @(posedge clk) begin	// RISC-V spec v2.2 p. 104
-		if(!reset) begin
-			is_r_instr <= 0; is_i_instr <= 0; is_s_instr <= 0; is_b_instr <= 0; is_u_instr <= 0; is_j_instr <= 0;
-			opcode <= 7'b0; rd <= 5'b0; funct3 <= 3'b0; rs1 <= 5'b0; rs2 <= 5'b0; imm <= 32'b0; 
-			rd_valid <= 0; funct3_valid <= 0; rs1_valid <= 0; rs2_valid <= 0; imm_valid <= 0;
-			dec_bits <= 11'b0;
-			is_addi <= 0; is_add <= 0; 
-			is_beq <= 0; is_bne <= 0; is_blt <= 0; is_bge <= 0; is_bltu <= 0; is_bgeu <= 0;	
-		end
-		else begin
-		
-			// determine instruction type
-			is_r_instr <= instr[6:2] == 5'b01011 || instr[6:2] == 5'b01100 || instr[6:2] == 5'b01110 || instr[6:2] == 5'b10100;
-			is_i_instr <= instr[6:2] == 5'b00000 || instr[6:2] == 5'b00001 || instr[6:2] == 5'b00100 || instr[6:2] == 5'b00110 || instr[6:2] == 5'b11001;
-			is_s_instr <= instr[6:2] == 5'b01000 || instr[6:2] == 5'b01001;
-			is_b_instr <= instr[6:2] == 5'b11000;
-			is_u_instr <= instr[6:2] == 5'b00101 || instr[6:2] == 5'b01101;
-			is_j_instr <= instr[6:2] == 5'b11011;
 	
-		end
-	end
-		
 
-	always @(instr or is_r_instr or is_i_instr or is_s_instr or is_b_instr or is_u_instr or is_j_instr) begin
-		// determine whether field is present in current instruction
-		rd_valid 		<= is_r_instr == 1 || is_i_instr == 1 || is_u_instr == 1 || is_j_instr == 1;
-		funct3_valid 	<= is_r_instr == 1 || is_i_instr == 1 || is_s_instr == 1 || is_b_instr == 1;
-		rs1_valid 	<= is_r_instr == 1 || is_i_instr == 1 || is_s_instr == 1 || is_b_instr == 1;
-		rs2_valid 	<= is_r_instr == 1 || is_s_instr == 1 || is_b_instr == 1;
-		imm_valid	<= is_i_instr == 1 || is_s_instr == 1 || is_b_instr == 1 || is_u_instr == 1 || is_j_instr == 1;
+/**********************************************************************
+** Component instances
+**********************************************************************/
+// instantiate the device under test
+program_counter pc_dut (     // Device under Test
+        // Inputs
+	.clk(clk_tb),
+	.reset(reset_tb),
+	.tgt_addr(des_value_tb),
+	.taken_br(taken_br_tb),
+	.is_jalr(is_jalr_tb),
+        // Outputs
+	.pc(pc_tb)
+        );
 
-		//construct immediate value out of instruction fields - RISC-V spec v2.2 p. 12 https://riscv.org/wp-content/uploads/2017/05/riscv-spec-v2.2.pdf
-		if (is_i_instr )
-				imm <= { {21{instr[31]}}, {instr[30:20]} };
-		else if (is_s_instr)
-				imm <= { {21{instr[31]}}, {instr[30:25]}, {instr[11:8]}, {instr[7]} };
-		else if (is_b_instr)
-				imm <= { {20{instr[31]}}, {instr[7]}, {instr[30:25]}, {instr[11:8]}, {1'b0} };	// last bit zero = only even target addresses possible
-		else if (is_u_instr)
-				imm <= { {instr[31]}, {instr[30:20]}, {instr[19:12]}, {12'b0} };		
-		else if (is_j_instr)
-				imm <= { {12{instr[31]}}, {instr[19:12]}, {instr[20]}, {instr[30:25]}, {instr[24:21]}, {1'b0} };
-		else
-			imm <= 32'b0;	
-	end
-
-	always @(*) begin
-		//instr or rd_valid or funct3_valid or rs1_valid or rs2_valid
-		//determine instruction field values
-		opcode 	<= instr[6:0];
-		#0.1		// somehow needed to extract the values
-		rd 		<= rd_valid ? 	instr[11:7] : 5'b0;		// loaded for S-type instructions as well, but not used
-		funct3 	<= funct3_valid ? 	instr[14:12] : 3'b0;
-		rs1 		<= rs1_valid ?	instr[19:15] : 5'b0;
-		rs2 		<= rs2_valid ? 	instr[24:20]: 5'b0;
-	end
-
-	always @(instr or funct3 or opcode) begin
-		dec_bits[10:0] <= {instr[30], funct3, opcode};		// RISC-V RV32I Base instruction set spec V2.2 p. 104
-		end
-
-	always @(dec_bits) begin
-		is_beq 	<= dec_bits[9:0] 		== 10'b_000_1100011;		//branch equal
-		is_bne 	<= dec_bits[9:0] 		== 10'b_001_1100011;		//branch not equal
-  		is_blt 	<= dec_bits[9:0] 		== 10'b_100_1100011;		//branch less than
-  		is_bge 	<= dec_bits[9:0] 		== 10'b_101_1100011;		//branch greater or equal
-  		is_bltu 	<= dec_bits[9:0] 		== 10'b_110_1100011;		//branch less than unsigned
-  		is_bgeu 	<= dec_bits[9:0] 		== 10'b_111_1100011;		//branch greater than unsigned			
-  		is_add 	<= dec_bits[10:0]		== 11'b0_000_0110011;		//add	
-		is_lui 	<= dec_bits[6:0]		== 11'b_0110111; 			// load upper immediate
-  		is_auipc 	<= dec_bits[6:0]		== 11'b_0010111; 			// add upper immediate to pc
-   		is_jal 	<= dec_bits[6:0] 		== 11'b_1101111; 			// jump and link (offset as immediate)
-   		is_jalr 	<= dec_bits[6:0]		== 11'b_1100111; 			// jump and link register (offset to be calculated)
-
-   //$is_load = $dec_bits ==? 11'bx_xxx_000011; // dont distinguish between indiviual load instructions
-   		is_addi 	<= dec_bits[9:0]		== 11'b_000_0010011; 		// add immediate
-   		is_slti 	<= dec_bits[9:0]		== 11'b_010_0010011; 		// set less than immediate
-   		is_sltiu 	<= dec_bits[9:0]		== 11'b_011_0010011; 		// set less than immediate unsigned
-
-		is_xori 	<= dec_bits[9:0] 		== 11'b_100_0010011; // bitwise xor immediate
-		is_ori 	<= dec_bits[9:0]		== 11'b_110_0010011; // bitwise or immediate
-   		is_andi 	<= dec_bits[9:0]		== 11'b_111_0010011; //bitwise and immediate
-   		is_slli 	<= dec_bits[10:0]		== 11'b0_001_0010011; // shift left logical immediate
-		is_srli 	<= dec_bits[10:0]		== 11'b0_101_0010011; // shift right logical immediate
-   		is_srai 	<= dec_bits[10:0]		== 11'b_1_101_0010011; // shift right arithmetic immediate
-  
-  		// new
-   		is_sub 	<= dec_bits[10:0]		== 11'b1_000_0110011;
-   		is_sll 	<= dec_bits[10:0]		== 11'b0_001_0110011; // shift left logical
-   		is_slt 	<= dec_bits[10:0]		== 11'b0_010_0110011; // set less than
-   		is_sltu 	<= dec_bits[10:0]		== 11'b0_011_0110011; // set less than unsigned
-   		is_xor 	<= dec_bits[10:0]		== 11'b0_100_0110011; // exclusive or
-   		is_srl 	<= dec_bits[10:0]		== 11'b0_101_0110011; // shift right logical
-   		is_sra 	<= dec_bits[10:0]		== 11'b1_101_0110011; // shift right arithmetic
-   		is_or 	<= dec_bits[10:0]		== 11'b0_110_0110011; 
-   		is_and 	<= dec_bits[10:0] 	== 11'b0_111_0110011; 
-	end
-endmodule
-
-
-
-module register_file(
-	input clk, reset,
-	input rs1_valid, rs2_valid, rd_valid,
-	input [4:0]rs1, rs2, rd,
-	input [31:0] dest_value,
-	output reg[31:0] src1_value, src2_value
+instruction_memory irom_dut(
+	// Inputs
+	.clk(clk_tb),
+	.reset(reset_tb),
+	.addr(pc_tb),
+	// Outputs
+	.instr(instr_tb)
 	);
 
-	reg [31:0]register_file[31:0];		// 2D array (Matrix): word size, register count
+instruction_decode dec_dut(
+	//Inputs
+	.clk(clk_tb),
+	.reset(reset_tb),
+	.instr(instr_tb),
+	// Outputs
+	.is_r_instr(is_r_instr_tb), .is_i_instr(is_i_instr_tb), .is_s_instr(is_s_instr_tb), .is_b_instr(is_b_instr_tb), .is_u_instr(is_u_instr_tb), .is_j_instr(is_j_instr_tb),
+	.opcode(opcode_tb), .rd(rd_tb), .funct3(funct3_tb), .rs1(rs1_tb), .rs2(rs2_tb), .imm(imm_tb),
+	//.src1_value(src1_value_tb), .src2_value(src2_value_tb), //.dest_value(dest_value_tb),
+	.rd_valid(rd_valid_tb), .funct3_valid(funct3_valid_tb), .rs1_valid(rs1_valid_tb), .rs2_valid(rs2_valid_tb), .imm_valid(imm_valid_tb),
+	.dec_bits(dec_bits_tb),
+	.is_beq(is_beq_tb), .is_bne(is_bne_tb), .is_blt(is_blt_tb), .is_bge(is_bge_tb), .is_bltu(is_bltu_tb), .is_bgeu(is_bgeu_tb),
+	.is_addi(is_addi_tb), .is_add(is_add_tb), .is_sub(is_sub_tb),
+	.is_lui(is_lui_tb), .is_auipc(is_auipc_tb), .is_jal(is_jal_tb), .is_jalr(is_jalr_tb),
+	.is_xor(is_xor_tb), .is_xori(is_xori_tb), .is_or(is_or_tb), .is_ori(is_ori_tb), .is_andi(is_andi_tb), .is_and(is_and_tb),
+	.is_slt(is_slt_tb), .is_slti(is_slti_tb), .is_sltu(is_sltu_tb), .is_sltiu(is_sltiu), .is_sll(is_sll_tb), .is_slli(is_slli_tb), .is_srl(is_srl_tb), .is_srli(is_srli_tb), .is_sra(is_sra_tb), .is_srai(is_srai_tb)
+	//.register_file(register_file_tb)
+	
+	);
+
+register_file rf_dut(
+	//Inputs
+	.clk(clk_tb),
+	.reset(reset_tb),
+	.rs1(rs1_tb), .rs2(rs2_tb), .rd(rd_tb),
+	.rs1_valid(rs1_valid_tb), .rs2_valid(rs2_valid_tb), .rd_valid(rd_valid_tb),
+	.dest_value(dest_value_tb),
+	// Outputs
+	.src1_value(src1_value_tb), .src2_value(src2_value_tb)
+	);
+
+
+
+arithmetic_logic_unit alu_dut(
+	// Inputs
+	.clk(clk_tb),
+	.reset(reset_tb),
+	.src1_value(src1_value_tb), .src2_value(src2_value_tb), .imm(imm_tb), .pc(pc_tb),
+	.is_beq(is_beq_tb), .is_bne(is_bne_tb), .is_blt(is_blt_tb), .is_bge(is_bge_tb), .is_bltu(is_bltu_tb), .is_bgeu(is_bgeu_tb),
+	.is_addi(is_addi_tb), .is_add(is_add_tb), .is_sub(is_sub_tb),
+	.is_lui(is_lui_tb), .is_auipc(is_auipc_tb), .is_jal(is_jal_tb), .is_jalr(is_jalr_tb),
+	.is_xor(is_xor_tb), .is_xori(is_xori_tb), .is_or(is_or_tb), .is_ori(is_ori_tb), .is_andi(is_andi_tb), .is_and(is_and_tb),
+	.is_slt(is_slt_tb), .is_slti(is_slti_tb), .is_sltu(is_sltu_tb), .is_sltiu(is_sltiu), .is_sll(is_sll_tb), .is_slli(is_slli_tb), .is_srl(is_srl_tb), .is_srli(is_srli_tb), .is_sra(is_sra_tb), .is_srai(is_srai_tb),
+	// outputs
+	.result(dest_value_tb),
+	.taken_br(taken_br_tb)
+	);
+
+
+	always #5 clk_tb = ~clk_tb;
 
 	initial begin
-		register_file[0] <= 32'b0;		// register 0 is hardware b0	
-		src1_value <= 32'b0;
-		src2_value <= 32'b0;
+		clk_tb <= 1; 
+		reset_tb <= 1;
+
+		#10 reset_tb <= 0;
+		#10 reset_tb <= 1;
+
 	end
-
-	always @(posedge clk) begin
-		if(!reset) begin
-			src1_value <= 32'b0;
-			src2_value <= 32'b0;
-		end
-		else if(rs1_valid)
-			src1_value <= register_file[rs1];		// load operand from source register 1
-		else if(rs2_valid)
-			src2_value <= register_file[rs2];
-		else if(rd_valid && (rd != 5'b0) )			// never write to register 0
-			register_file[rd] <= dest_value;		// store value into the destination register
-		else
-			register_file[0] <= 32'b0;
-	end
-endmodule
-
-
-module arithmetic_logic_unit(
-	input clk, reset,
-	input [31:0] src1_value, src2_value,
-	input [31:0] imm, pc,
-	input is_beq, is_bne, is_blt, is_bge, is_bltu, is_bgeu, is_jal, 
-	input is_addi, is_add, is_sub,
-	input is_lui, is_auipc, is_jalr,
-	input is_xor, is_xori, is_or, is_ori, is_andi, is_and,
-	input is_slt, is_slti, is_sltu, is_sltiu, is_slli, is_srli, is_sra, is_srai, is_sll, is_srl,
-	output reg[31:0] result,
-	output reg taken_br
-);
-
-	always @(posedge clk) begin
-		if (!reset) begin
-			result <= 32'b0;
-			taken_br <= 1'b0;
-		end 
-		else begin
-		taken_br	= 	is_beq 	? (src1_value == src2_value) :				// RISC-V spec p.17
-					is_bne	? (src1_value != src2_value) :
-					is_blt	? ((src1_value < src2_value) ^ (src1_value[31] != src2_value[31])) :	// signed!  src1 < src2   XOR different sign  ;  consider evaluation of: d-8 (=b1000) < d7 (b0111)? 
-					is_bge	? ((src1_value >= src2_value) ^ (src1_value[31] != src2_value[31])) :	// signed
-					is_bltu	? (src1_value < src2_value) :
-					is_bgeu	? (src1_value >= src2_value) :
-					is_jal	? 1'b1 :									// branch target address is computed the same way as for conditional branches, RISC-V spec p. 15
-					1'b0;
-		
-		result[31:0] = 	is_addi 	? src1_value + imm :					// RISC-V spec p.15
-					is_add  	? src1_value + src2_value :
-				is_sub	? src1_value - src2_value :
-				taken_br	? pc + imm :									// RISC-V spec p.15 / p.17
-				is_jalr	? src1_value + imm :							// RISC-V spec p. 16
-				is_or	? src1_value | src2_value :
-				is_ori	? src1_value | imm :
-				is_xor	? src1_value ^ src2_value :
-				is_xori 	? src1_value ^ imm :
-				is_and 	? src1_value & src2_value :
-				is_andi	? src1_value & imm :
-				is_slt	? (src1_value[31] ^ src2_value[31]) ? 					// RISC-V spec p. 13 "set rd 1 if src1_value is less than immediate"
-							{31'b0, src1_value < src2_value} : 
-							{31'b0, (src1_value - src2_value < 0)} :
-				is_slti	? (src1_value[31] ^ imm[31]) ? 					// RISC-V spec p. 13 "set rd 1 if src1_value is less than immediate"
-							{31'b0, src1_value < imm} : 
-							{31'b0, (src1_value - imm < 0)} :
-				is_sltu	? {31'b0, (src1_value - src2_value < 0)} :
-				is_sltiu	? {31'b0, (src1_value - imm < 0)} :	
-				is_sll	? src1_value << src2_value[4:0] :
-				is_slli	? src1_value << imm[4:0] :
-				is_srl	? src1_value >> src2_value[4:0] :
-				is_srli	? src1_value >> imm[4:0] :
-				is_sra	? {{ 32{src1_value[31]} } , src1_value} >> src2_value[4:0]: 
-				is_srai	? {{ 32{src1_value[31]} } , src1_value} >> imm[4:0]: 					// concat to 64 bit, extend sign into the upper half, than shift
-			
-				
- 				is_lui	? {imm[31:12], 12'b0} :						// RISC-V spec p.14
-				is_auipc 	?  {imm[31:12], 12'b0} + pc :					// RISC-V spec p.14
-				32'b0; // default
-		end
-	end
-endmodule
+ 
+endmodule // riscv_core_tb
