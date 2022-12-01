@@ -64,10 +64,18 @@ module instruction_memory(
 			32'h8:	rom_data = 32'b1111_1111_1100_00000_000_00011_0010011;		// (I) ADDI x3, x0, 111111111100
 			32'hc:	rom_data = 32'b0000_0101_1100_00001_111_00101_0010011;		// (I) ANDI x5, x1, 1011100
 			32'h10:	rom_data = 32'b0000_0001_0101_00101_100_00101_0010011;		// (I) XORI x5, x5, 10101
-			32'h14:	rom_data = 32'b0000_0000_0010_0000_1111_0101_0011_0011;		// Cycle 13 (R) AND r10, x1, x2
-			32'h18:	rom_data = 32'b0000_0000_0000_0000_0000_1001_1011_0111;		// Cycle 31 (U) LUI x19, 0
-			32'h1c:	rom_data = 32'b0000_0000_0100_0000_0000_1100_1110_1111;		// Cycle 44 (J) JAL x25, 10
-			32'h20:	rom_data = 32'b0000_0000_0001_0001_0010_0000_1010_0011;		// Cycle 51 (S) SW x2, x1, 1
+			32'h14:	rom_data = 32'b0000_0101_1100_00001_110_00110_0010011;		// (I) ORI x6, x1, 1011100
+			32'h18:	rom_data = 32'b0000_0101_1100_00110_100_00110_0010011;		// (I) XORI x6, x6, 1011100
+			32'h1c:	rom_data = 32'b0000_0000_0111_00001_000_00111_0010011;		// (I) ADDI x7, x1, 111
+			32'h20:	rom_data = 32'b0000_0001_1101_00111_100_00111_0010011;		// (I) XORI x7, x7, 11101
+			32'h24:	rom_data = 32'b0000_0000_0110_00001_001_01000_0010011;		// (I) SLLI x8, x1, 110
+			32'h28:	rom_data = 32'b0101_0100_0001_01000_100_01000_0010011;		// (I) XORI x8, x8, 10101000001
+			32'h2c:	rom_data = 32'b0000_0000_0010_00001_101_01001_0010011;		// (I) SRLI x9, x1, 10
+			32'h30:	rom_data = 32'b0000_0000_0100_01001_100_01001_0010011;		// (I) XORI x9, x9, 100
+			32'h34:	rom_data = 32'b0000_0000_0010_0000_1111_0101_0011_0011;		// Cycle 13 (R) AND r10, x1, x2
+			32'h38:	rom_data = 32'b0000_0000_0000_0000_0000_1001_1011_0111;		// Cycle 31 (U) LUI x19, 0
+			32'h3c:	rom_data = 32'b0000_0000_0100_0000_0000_1100_1110_1111;		// Cycle 44 (J) JAL x25, 10
+			32'h40:	rom_data = 32'b0000_0000_0001_0001_0010_0000_1010_0011;		// Cycle 51 (S) SW x2, x1, 1
 		endcase
 endmodule
 
@@ -83,9 +91,10 @@ module instruction_decode(
 	output reg[31:0]imm, //src1_value, src2_value, dest_value,		// immediate value (= operand that is decoded inside the instruction)
 	output reg rd_valid, funct3_valid, rs1_valid, rs2_valid, imm_valid,
 	output reg [10:0]dec_bits,	// instruction identification
-	output reg is_addi, is_add, is_beq, is_bne, is_blt, is_bge, is_bltu, is_bgeu, is_lui, is_auipc, is_jal, is_jalr,
-	output reg is_xori, is_ori, is_andi, is_and,
-	output reg is_slti, is_sltiu
+	output reg is_addi, is_add, is_sub,
+	output reg is_beq, is_bne, is_blt, is_bge, is_bltu, is_bgeu, is_lui, is_auipc, is_jal, is_jalr,
+	output reg is_xor, is_xori, is_or, is_ori, is_andi, is_and,
+	output reg is_slt, is_slti, is_sltu, is_sltiu, is_slli, is_srli, is_sra, is_srai, is_sll, is_srl
 	);
 
 	initial begin
@@ -130,19 +139,13 @@ module instruction_decode(
 		imm_valid	<= is_i_instr == 1 || is_s_instr == 1 || is_b_instr == 1 || is_u_instr == 1 || is_j_instr == 1;
 
 		//construct immediate value out of instruction fields - RISC-V spec v2.2 p. 12 https://riscv.org/wp-content/uploads/2017/05/riscv-spec-v2.2.pdf
-		if (is_i_instr )
-				imm <= { {21{instr[31]}}, {instr[30:20]} };
-		else if (is_s_instr)
-				imm <= { {21{instr[31]}}, {instr[30:25]}, {instr[11:8]}, {instr[7]} };
-		else if (is_b_instr)
-				imm <= { {20{instr[31]}}, {instr[7]}, {instr[30:25]}, {instr[11:8]}, {1'b0} };	// last bit zero = only even target addresses possible
-		else if (is_u_instr)
-				imm <= { {instr[31]}, {instr[30:20]}, {instr[19:12]}, {12'b0} };		
-		else if (is_j_instr)
-				imm <= { {12{instr[31]}}, {instr[19:12]}, {instr[20]}, {instr[30:25]}, {instr[24:21]}, {1'b0} };
-		else
-			imm <= 32'b0;	
-	end
+		imm <= 	is_i_instr ? { {21{instr[31]}}, {instr[30:20]} } :
+				is_s_instr ? { {21{instr[31]}}, {instr[30:25]}, {instr[11:8]}, {instr[7]} } :
+				is_b_instr ? { {20{instr[31]}}, {instr[7]}, {instr[30:25]}, {instr[11:8]}, {1'b0} } :	// last bit zero = only even target addresses possible
+				is_u_instr ? { {instr[31]}, {instr[30:20]}, {instr[19:12]}, {12'b0} } :
+				is_j_instr ? { {12{instr[31]}}, {instr[19:12]}, {instr[20]}, {instr[30:25]}, {instr[24:21]}, {1'b0} } :
+				32'b0;		// default
+	end									
 
 	always @(*) begin
 		//instr or rd_valid or funct3_valid or rs1_valid or rs2_valid
@@ -177,27 +180,22 @@ module instruction_decode(
    		is_slti 	<= dec_bits[9:0]		== 11'b_010_0010011; 		// set less than immediate
    		is_sltiu 	<= dec_bits[9:0]		== 11'b_011_0010011; 		// set less than immediate unsigned
 
-			// instructions are not correctly decoded. 
-			//rd, rs1, funct3 are not extracted			
-			//dec_bits is not correctly constructed
-			
-
 		is_xori 	<= dec_bits[9:0] 		== 11'b_100_0010011; // bitwise xor immediate
 		is_ori 	<= dec_bits[9:0]		== 11'b_110_0010011; // bitwise or immediate
    		is_andi 	<= dec_bits[9:0]		== 11'b_111_0010011; //bitwise and immediate
-   /*
-   $is_slli = $dec_bits == 11'b0_001_0010011; // shift left logical immediate
-   $is_srli = $dec_bits == 11'b0_101_0010011; // shift right logical immediate
-   $is_srai = $dec_bits == 11'b_1_101_0010011; // shift right arithmetic immediate
-   $is_add = $dec_bits == 11'b0_000_0110011;
-   $is_sub = $dec_bits == 11'b1_000_0110011;
-   $is_sll = $dec_bits == 11'b0_001_0110011; // shift logical left
-   $is_slt = $dec_bits == 11'b0_010_0110011; // set less than
-   $is_sltu = $dec_bits == 11'b0_011_0110011; // set less than unsigned
-   $is_xor = $dec_bits == 11'b0_100_0110011; // exclusive or
-   $is_srl = $dec_bits == 11'b0_101_0110011; // shift right logical
-   $is_sra = $dec_bits == 11'b1_101_0110011; // shift right arithmetic
-   $is_or = $dec_bits == 11'b0_110_0110011; */
+   		is_slli 	<= dec_bits[10:0]		== 11'b0_001_0010011; // shift left logical immediate
+		is_srli 	<= dec_bits[10:0]		== 11'b0_101_0010011; // shift right logical immediate
+   		is_srai 	<= dec_bits[10:0]		== 11'b_1_101_0010011; // shift right arithmetic immediate
+  
+  		// new
+   		is_sub 	<= dec_bits[10:0]		== 11'b1_000_0110011;
+   		is_sll 	<= dec_bits[10:0]		== 11'b0_001_0110011; // shift left logical
+   		is_slt 	<= dec_bits[10:0]		== 11'b0_010_0110011; // set less than
+   		is_sltu 	<= dec_bits[10:0]		== 11'b0_011_0110011; // set less than unsigned
+   		is_xor 	<= dec_bits[10:0]		== 11'b0_100_0110011; // exclusive or
+   		is_srl 	<= dec_bits[10:0]		== 11'b0_101_0110011; // shift right logical
+   		is_sra 	<= dec_bits[10:0]		== 11'b1_101_0110011; // shift right arithmetic
+   		is_or 	<= dec_bits[10:0]		== 11'b0_110_0110011; 
    		is_and 	<= dec_bits[10:0] 	== 11'b0_111_0110011; 
 	end
 endmodule
@@ -215,7 +213,7 @@ module register_file(
 	reg [31:0]register_file[31:0];		// 2D array (Matrix): word size, register count
 
 	initial begin
-		register_file[0] <= 32'b0;		// register 0 is hardware b0	
+		register_file[0] <= 32'b0;		// register 0 is hardware b0	RISC-V spec p. 9
 		src1_value <= 32'b0;
 		src2_value <= 32'b0;
 	end
@@ -225,14 +223,12 @@ module register_file(
 			src1_value <= 32'b0;
 			src2_value <= 32'b0;
 		end
-		else if(rs1_valid)
-			src1_value <= register_file[rs1];		// load operand from source register 1
-		else if(rs2_valid)
-			src2_value <= register_file[rs2];
-		else if(rd_valid && (rd != 5'b0) )			// never write to register 0
-			register_file[rd] <= dest_value;		// store value into the destination register
-		else
-			register_file[0] <= 32'b0;
+		else begin
+		src1_value 		<= rs1_valid 	? register_file[rs1] : 32'b0;		// load operand from source register 1
+		src2_value 		<= rs2_valid 	? register_file[rs2] : 32'b0;
+		register_file[rd] 	<= rd_valid & (rd != 5'b0)	? dest_value : 32'b0; // never write to register 0 , // store value into the destination register
+
+		end
 	end
 endmodule
 
@@ -241,13 +237,15 @@ module arithmetic_logic_unit(
 	input clk, reset,
 	input [31:0] src1_value, src2_value,
 	input [31:0] imm, pc,
-	input is_addi, is_add, 
-	input is_beq, is_bne, is_blt, is_bge, is_bltu, is_bgeu, is_lui, is_auipc, is_jal, is_jalr,
-	input is_xori, is_ori, is_andi, is_and,
-	input is_slti, is_sltiu,
+	input is_beq, is_bne, is_blt, is_bge, is_bltu, is_bgeu, is_jal, 
+	input is_addi, is_add, is_sub,
+	input is_lui, is_auipc, is_jalr,
+	input is_xor, is_xori, is_or, is_ori, is_andi, is_and,
+	input is_slt, is_slti, is_sltu, is_sltiu, is_slli, is_srli, is_sra, is_srai, is_sll, is_srl,
 	output reg[31:0] result,
 	output reg taken_br
 );
+
 	always @(posedge clk) begin
 		if (!reset) begin
 			result <= 32'b0;
@@ -256,20 +254,42 @@ module arithmetic_logic_unit(
 		else begin
 		taken_br	= 	is_beq 	? (src1_value == src2_value) :				// RISC-V spec p.17
 					is_bne	? (src1_value != src2_value) :
-					is_blt	? ((src1_value < src2_value) ^ (src1_value[31] != src2_value[31])) :		// signed!  src1 < src2   XOR different sign  ;  consider evaluation of: d-8 (=b1000) < d7 (b0111)? 
+					is_blt	? ((src1_value < src2_value) ^ (src1_value[31] != src2_value[31])) :	// signed!  src1 < src2   XOR different sign  ;  consider evaluation of: d-8 (=b1000) < d7 (b0111)? 
 					is_bge	? ((src1_value >= src2_value) ^ (src1_value[31] != src2_value[31])) :	// signed
 					is_bltu	? (src1_value < src2_value) :
 					is_bgeu	? (src1_value >= src2_value) :
 					is_jal	? 1'b1 :									// branch target address is computed the same way as for conditional branches, RISC-V spec p. 15
 					1'b0;
-		result = 	is_addi 	? src1_value + imm :
-				is_add  	? src1_value + src2_value :
+		
+		result[31:0] = 	is_addi 	? src1_value + imm :					// RISC-V spec p.15
+					is_add  	? src1_value + src2_value :
+				is_sub	? src1_value - src2_value :
 				taken_br	? pc + imm :									// RISC-V spec p.15 / p.17
 				is_jalr	? src1_value + imm :							// RISC-V spec p. 16
-				is_slti	? (src1_value[31] == imm[31]) ? 			// RISC-V spec p. 13
+				is_or	? src1_value | src2_value :
+				is_ori	? src1_value | imm :
+				is_xor	? src1_value ^ src2_value :
+				is_xori 	? src1_value ^ imm :
+				is_and 	? src1_value & src2_value :
+				is_andi	? src1_value & imm :
+				is_slt	? (src1_value[31] ^ src2_value[31]) ? 					// RISC-V spec p. 13 "set rd 1 if src1_value is less than immediate"
+							{31'b0, src1_value < src2_value} : 
+							{31'b0, (src1_value - src2_value < 0)} :
+				is_slti	? (src1_value[31] ^ imm[31]) ? 					// RISC-V spec p. 13 "set rd 1 if src1_value is less than immediate"
 							{31'b0, src1_value < imm} : 
-							{31'b0, src1_value[31]} :
-				is_sltiu	? {31'b0, src1_value < imm} :				// 0000000000000000000000 comp
+							{31'b0, (src1_value - imm < 0)} :
+				is_sltu	? {31'b0, (src1_value - src2_value < 0)} :
+				is_sltiu	? {31'b0, (src1_value - imm < 0)} :	
+				is_sll	? src1_value << src2_value[4:0] :
+				is_slli	? src1_value << imm[4:0] :
+				is_srl	? src1_value >> src2_value[4:0] :
+				is_srli	? src1_value >> imm[4:0] :
+				is_sra	? {{ 32{src1_value[31]} } , src1_value} >> src2_value[4:0]: 
+				is_srai	? {{ 32{src1_value[31]} } , src1_value} >> imm[4:0]: 					// concat to 64 bit, extend sign into the upper half, than shift
+			
+				
+ 				is_lui	? {imm[31:12], 12'b0} :						// RISC-V spec p.14
+				is_auipc 	?  {imm[31:12], 12'b0} + pc :					// RISC-V spec p.14
 				32'b0; // default
 		end
 	end
