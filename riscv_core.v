@@ -14,7 +14,7 @@ module program_counter(
 	input clk,
 	input reset,
 	input taken_br, is_jalr,
-	input tgt_addr,
+	input [31:0]tgt_addr,
 	output reg [31:0]pc
 	);
 	
@@ -88,7 +88,7 @@ module instruction_decode(
 	output reg [6:0]opcode,
 	output reg[4:0]rd,	rs1, rs2,		// destination register, source register 1, source register 2
 	output reg[2:0]funct3,
-	output reg[31:0]imm, //src1_value, src2_value, dest_value,		// immediate value (= operand that is decoded inside the instruction)
+	output reg[31:0]imm, 		// immediate value (= operand that is decoded inside the instruction)
 	output reg rd_valid, funct3_valid, rs1_valid, rs2_valid, imm_valid,
 	output reg [10:0]dec_bits,	// instruction identification
 	output reg is_addi, is_add, is_sub,
@@ -211,6 +211,9 @@ module register_file(
 	);
 
 	reg [31:0]register_file[31:0];		// 2D array (Matrix): word size, register count
+	//reg rd_valid_prv;
+	//reg [4:0]rd_prv;
+
 
 	initial begin
 		register_file[0] <= 32'b0;		// register 0 is hardware b0	RISC-V spec p. 9
@@ -223,11 +226,14 @@ module register_file(
 			src1_value <= 32'b0;
 			src2_value <= 32'b0;
 		end
+		else if(rd_valid & (rd != 5'b0))
+			// Error description: writing the destination value back to the register currently happens one clock after calculating the result, by than rd was updated with the next instruction, 
+			// currently the result is begin written in the destination register specified in the following instruction, 
+			// SOLUTION: make rd available one cycle later, pipelining needed?
+			register_file[rd] 	<= dest_value; 		// never write to register 0 , // store value into the destination register
 		else begin
-		src1_value 		<= rs1_valid 	? register_file[rs1] : 32'b0;		// load operand from source register 1
-		src2_value 		<= rs2_valid 	? register_file[rs2] : 32'b0;
-		register_file[rd] 	<= rd_valid & (rd != 5'b0)	? dest_value : 32'b0; // never write to register 0 , // store value into the destination register
-
+			src1_value 		<= rs1_valid 	? register_file[rs1] : 32'b0;		// load operand from source register 1
+			src2_value 		<= rs2_valid 	? register_file[rs2] : 32'b0;
 		end
 	end
 endmodule
