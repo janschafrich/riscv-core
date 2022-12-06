@@ -211,30 +211,64 @@ module register_file(
 	);
 
 	reg [31:0]register_file[31:0];		// 2D array (Matrix): word size, register count
-	//reg rd_valid_prv;
-	//reg [4:0]rd_prv;
+	reg rd_valid_prv;
+	reg [4:0]rd_prv;
 
 
 	initial begin
 		register_file[0] <= 32'b0;		// register 0 is hardware b0	RISC-V spec p. 9
 		src1_value <= 32'b0;
 		src2_value <= 32'b0;
+		rd_valid_prv <= 1'b0;
 	end
 
 	always @(posedge clk) begin
 		if(!reset) begin
 			src1_value <= 32'b0;
 			src2_value <= 32'b0;
-		end
-		else if(rd_valid & (rd != 5'b0))
-			// Error description: writing the destination value back to the register currently happens one clock after calculating the result, by than rd was updated with the next instruction, 
-			// currently the result is begin written in the destination register specified in the following instruction, 
-			// SOLUTION: make rd available one cycle later, pipelining needed?
-			register_file[rd] 	<= dest_value; 		// never write to register 0 , // store value into the destination register
+			rd_valid_prv <= 1'b0;
+		end 
 		else begin
-			src1_value 		<= rs1_valid 	? register_file[rs1] : 32'b0;		// load operand from source register 1
-			src2_value 		<= rs2_valid 	? register_file[rs2] : 32'b0;
+		// hold the destination register available until the next clock cycle when the result is computed
+		begin: rd_fsm			// destination register finite state machine
+			case(rd_valid_prv)
+				0: begin
+					rd_valid_prv = rd_valid;		// update with current value for use in next cycle
+					rd_prv = rd;
+					end
+				1: begin							// if rd was valid in the previous cycle, now store the dest_value in register given also in the previous cycle				
+					if(rd_prv != 5'b0) 				// never write into register 0
+						register_file[rd_prv] 	= dest_value;
+					rd_valid_prv = rd_valid;		// update with current value for use in next cycle
+					rd_prv = rd;
+					end
+				default: rd_valid_prv = 1'b0;
+			endcase
+		end	
+		// values are available to the ALU one cycle after load --> wrong results
+		// ALU may only start calculating after all values are ready
+		// significant restructuring between ALU and register access required
+		if (rs1_valid) 
+			begin
+				if (rs1 == rd_prv)
+					src1_value <= dest_value;	// result forwarding
+				else
+					src1_value <=register_file[rs1];
+			end
+		else
+			src1_value <= 32'b0; 
 		end
+		
+		if (rs2_valid) 
+			begin
+				if (rs2 == rd_prv)
+					src2_value <= dest_value;	// result forwarding
+			else
+				src2_value <=register_file[rs2];
+			end
+		else
+			src2_value <= 32'b0; 
+		
 	end
 endmodule
 
