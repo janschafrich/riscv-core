@@ -83,19 +83,30 @@ endmodule
 // extract information from instruction
 module instruction_decode(
 	input wire clk, reset,
-	input [31:0]instr,
-	output reg is_r_instr, is_i_instr, is_s_instr, is_b_instr, is_u_instr, is_j_instr,
-	output reg [6:0]opcode,
-	output reg[4:0]rd,	rs1, rs2,		// destination register, source register 1, source register 2
+	input [31:0]instr, pc,
+	output reg [6:0]opcode,		
 	output reg[2:0]funct3,
 	output reg[31:0]imm, 		// immediate value (= operand that is decoded inside the instruction)
-	output reg rd_valid, funct3_valid, rs1_valid, rs2_valid, imm_valid,
 	output reg [10:0]dec_bits,	// instruction identification
-	output reg is_addi, is_add, is_sub,
-	output reg is_beq, is_bne, is_blt, is_bge, is_bltu, is_bgeu, is_lui, is_auipc, is_jal, is_jalr,
-	output reg is_xor, is_xori, is_or, is_ori, is_andi, is_and,
-	output reg is_slt, is_slti, is_sltu, is_sltiu, is_slli, is_srli, is_sra, is_srai, is_sll, is_srl
+	output reg[31:0]rslt_value,
+	output reg taken_br,  is_jalr
 	);
+
+	// signals
+	// signals for decode
+	reg is_r_instr, is_i_instr, is_s_instr, is_b_instr, is_u_instr, is_j_instr;
+	// signals for the register
+	reg [31:0]register_file[31:0];					// 2D array (Matrix): word size, register count
+	reg rd_valid, funct3_valid, rs1_valid, rs2_valid, imm_valid;
+	reg [4:0] rs1, rs2, rd;							// destination register, source register 1, source register 2
+	reg [31:0] src1_value, src2_value;
+	// signals for the ALU
+	reg is_beq, is_bne, is_blt, is_bge, is_bltu, is_bgeu, is_jal; 
+	reg is_addi, is_add, is_sub;
+	reg is_lui, is_auipc;
+	reg is_xor, is_xori, is_or, is_ori, is_andi, is_and;
+	reg is_slt, is_slti, is_sltu, is_sltiu, is_slli, is_srli, is_sra, is_srai, is_sll, is_srl;
+	
 
 	initial begin
 		is_r_instr <= 0;
@@ -104,7 +115,11 @@ module instruction_decode(
 		is_b_instr <= 0;
 		is_u_instr <= 0;
 		is_j_instr <= 0;
-		//rd_value <= 0;
+		register_file[0] <= 32'b0;		// register 0 is hardware b0	RISC-V spec p. 9
+		src1_value <= 32'b0;
+		src2_value <= 32'b0;
+		rslt_value <= 32'b0;
+		taken_br <= 1'b0;
 	end
 
 	always @(posedge clk) begin	// RISC-V spec v2.2 p. 104
@@ -115,6 +130,8 @@ module instruction_decode(
 			dec_bits <= 11'b0;
 			is_addi <= 0; is_add <= 0; 
 			is_beq <= 0; is_bne <= 0; is_blt <= 0; is_bge <= 0; is_bltu <= 0; is_bgeu <= 0;	
+			src1_value <= 32'b0; src2_value <= 32'b0; register_file[0] <= 32'b0;
+			rslt_value <= 32'b0;	taken_br <= 1'b0;
 		end
 		else begin
 		
@@ -147,7 +164,7 @@ module instruction_decode(
 				32'b0;		// default
 	end									
 
-	always @(*) begin
+	always @(instr) begin
 		//instr or rd_valid or funct3_valid or rs1_valid or rs2_valid
 		//determine instruction field values
 		opcode 	<= instr[6:0];
@@ -198,101 +215,16 @@ module instruction_decode(
    		is_or 	<= dec_bits[10:0]		== 11'b0_110_0110011; 
    		is_and 	<= dec_bits[10:0] 	== 11'b0_111_0110011; 
 	end
-endmodule
-
-
-
-module register_file(
-	input clk, reset,
-	input rs1_valid, rs2_valid, rd_valid,
-	input [4:0]rs1, rs2, rd,
-	input [31:0] dest_value,
-	output reg[31:0] src1_value, src2_value
-	);
-
-	reg [31:0]register_file[31:0];		// 2D array (Matrix): word size, register count
-	reg rd_valid_prv;
-	reg [4:0]rd_prv;
-
-
-	initial begin
-		register_file[0] <= 32'b0;		// register 0 is hardware b0	RISC-V spec p. 9
-		src1_value <= 32'b0;
-		src2_value <= 32'b0;
-		rd_valid_prv <= 1'b0;
+	//register access
+	always @(rs1 or rs2 or rslt_value) begin //rs1_valid or rs2_valid or rd_valid or rs1 or rs2 or rd or rslt_value
+		src1_value 		<= rs1_valid	? register_file[rs1] 	: 32'b0;
+		src2_value 		<= rs2_valid	? register_file[rs2] 	: 32'b0;
+		register_file[rd] 	<= ( (rd != 5'b0) && rd_valid)	? 	rslt_value 	: 32'b0;
 	end
 
-	always @(posedge clk) begin
-		if(!reset) begin
-			src1_value <= 32'b0;
-			src2_value <= 32'b0;
-			rd_valid_prv <= 1'b0;
-		end 
-		else begin
-		// hold the destination register available until the next clock cycle when the result is computed
-		begin: rd_fsm			// destination register finite state machine
-			case(rd_valid_prv)
-				0: begin
-					rd_valid_prv = rd_valid;		// update with current value for use in next cycle
-					rd_prv = rd;
-					end
-				1: begin							// if rd was valid in the previous cycle, now store the dest_value in register given also in the previous cycle				
-					if(rd_prv != 5'b0) 				// never write into register 0
-						register_file[rd_prv] 	= dest_value;
-					rd_valid_prv = rd_valid;		// update with current value for use in next cycle
-					rd_prv = rd;
-					end
-				default: rd_valid_prv = 1'b0;
-			endcase
-		end	
-		// values are available to the ALU one cycle after load --> wrong results
-		// ALU may only start calculating after all values are ready
-		// significant restructuring between ALU and register access required
-		if (rs1_valid) 
-			begin
-				if (rs1 == rd_prv)
-					src1_value <= dest_value;	// result forwarding
-				else
-					src1_value <=register_file[rs1];
-			end
-		else
-			src1_value <= 32'b0; 
-		end
-		
-		if (rs2_valid) 
-			begin
-				if (rs2 == rd_prv)
-					src2_value <= dest_value;	// result forwarding
-			else
-				src2_value <=register_file[rs2];
-			end
-		else
-			src2_value <= 32'b0; 
-		
-	end
-endmodule
-
-
-module arithmetic_logic_unit(
-	input clk, reset,
-	input [31:0] src1_value, src2_value,
-	input [31:0] imm, pc,
-	input is_beq, is_bne, is_blt, is_bge, is_bltu, is_bgeu, is_jal, 
-	input is_addi, is_add, is_sub,
-	input is_lui, is_auipc, is_jalr,
-	input is_xor, is_xori, is_or, is_ori, is_andi, is_and,
-	input is_slt, is_slti, is_sltu, is_sltiu, is_slli, is_srli, is_sra, is_srai, is_sll, is_srl,
-	output reg[31:0] result,
-	output reg taken_br
-);
-
-	always @(posedge clk) begin
-		if (!reset) begin
-			result <= 32'b0;
-			taken_br <= 1'b0;
-		end 
-		else begin
-		taken_br	= 	is_beq 	? (src1_value == src2_value) :				// RISC-V spec p.17
+	// branch and jump
+	always @(*) begin		
+		taken_br	<= 	is_beq 	? (src1_value == src2_value) :				// RISC-V spec p.17
 					is_bne	? (src1_value != src2_value) :
 					is_blt	? ((src1_value < src2_value) ^ (src1_value[31] != src2_value[31])) :	// signed!  src1 < src2   XOR different sign  ;  consider evaluation of: d-8 (=b1000) < d7 (b0111)? 
 					is_bge	? ((src1_value >= src2_value) ^ (src1_value[31] != src2_value[31])) :	// signed
@@ -300,8 +232,11 @@ module arithmetic_logic_unit(
 					is_bgeu	? (src1_value >= src2_value) :
 					is_jal	? 1'b1 :									// branch target address is computed the same way as for conditional branches, RISC-V spec p. 15
 					1'b0;
-		
-		result[31:0] = 	is_addi 	? src1_value + imm :					// RISC-V spec p.15
+	end
+	
+	// arithmetic and logic
+	always @(*) begin
+		rslt_value[31:0] <= 	is_addi 	? src1_value + imm :					// RISC-V spec p.15
 					is_add  	? src1_value + src2_value :
 				is_sub	? src1_value - src2_value :
 				taken_br	? pc + imm :									// RISC-V spec p.15 / p.17
@@ -327,10 +262,8 @@ module arithmetic_logic_unit(
 				is_sra	? {{ 32{src1_value[31]} } , src1_value} >> src2_value[4:0]: 
 				is_srai	? {{ 32{src1_value[31]} } , src1_value} >> imm[4:0]: 					// concat to 64 bit, extend sign into the upper half, than shift
 			
-				
  				is_lui	? {imm[31:12], 12'b0} :						// RISC-V spec p.14
 				is_auipc 	?  {imm[31:12], 12'b0} + pc :					// RISC-V spec p.14
 				32'b0; // default
-		end
 	end
 endmodule
