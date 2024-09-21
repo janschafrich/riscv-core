@@ -1,0 +1,7 @@
+0.7
+2020.2
+Jun 14 2024
+09:10:06
+/home/jscha/projects/riscv-core/riscv-core.sim/sim_1/behav/xsim/glbl.v,1708598507,verilog,,,,glbl,,uvm,,,,,,
+/home/jscha/projects/riscv-core/riscv-core.srcs/sim_1/new/tb_core.sv,1726932537,systemVerilog,,,,riscv_core_tb,,uvm,,,,,,
+/home/jscha/projects/riscv-core/riscv-core.srcs/sources_1/new/top.sv,1726932467,systemVerilog,,/home/jscha/projects/riscv-core/riscv-core.srcs/sim_1/new/tb_core.sv,,arithmetic_logic_unit;instruction_decode;instruction_memory;program_counter;register_file,,uvm,,,,,,
